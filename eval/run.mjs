@@ -12,7 +12,8 @@
 // Each case runs twice: RAW (name it from memory) and +INDEX (scan the
 // catalog's table of contents, select the matching entry). Reports paired
 // accuracy and a McNemar exact p on the discordant cases.
-import { readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+import { loadIndexes } from "../core/matcher.mjs";
 
 const arg = (n, d) => process.argv.slice(2).find((x) => x.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d;
 const BASE = process.env.PN_BASE_URL ?? "https://api.openai.com/v1";
@@ -33,15 +34,12 @@ async function chat(system, user) {
   return (await res.json()).choices[0].message.content ?? "";
 }
 
-// --- load index (all files in ../indexes/) and benchmark ---
-const index = [];
-const dir = new URL("../indexes/", import.meta.url);
-for (const f of readdirSync(dir)) {
-  if (!f.endsWith(".json")) continue;
-  for (const e of JSON.parse(readFileSync(new URL(f, dir), "utf-8"))) {
-    index.push({ name: e.name, aliases: e.aliases || [], cat: (e.field || e.kind || "").split(",")[0], symptom: e.symptom || "", distinguish: e.distinguish || [] });
-  }
-}
+// --- load catalog (your indexes/ if present, else the example) and benchmark ---
+const index = loadIndexes([
+  new URL("../indexes/", import.meta.url),
+  new URL("../examples/", import.meta.url),
+]);
+if (!index.length) { console.error("[eval] no catalog found in indexes/ or examples/"); process.exit(1); }
 const toc = index.map((e, i) => {
   const disc = e.distinguish.length ? ` [${e.distinguish.join("; ")}]` : "";
   return `${i}. [${e.cat}] ${e.name} — ${e.symptom}${disc}`;

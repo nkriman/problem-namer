@@ -1,6 +1,6 @@
 # problem-namer
 
-**A catalog of named problems, and an ambient hook that notices when you're describing one without knowing its name.**
+**Notices when you're describing a named problem without knowing its name, and tells you what it's called.**
 
 When you're stuck on something you can't name, you can't search for it, can't
 read about it, and can't tell whether an answer about it is right. The moment
@@ -9,23 +9,42 @@ query problem, or Simpson's paradox — you stop being stuck in a unique
 personal mystery and inherit decades of prior art. Naming converts an
 unsearchable description into a searchable term.
 
-This repo is that move, packaged:
+This repo is that move, packaged as **one core plus thin adapters** — pick
+the integration that fits how your agent runs:
 
-- **`indexes/problems.json`** — a catalog of 189 named problems, effects, and
-  laws across software, distributed systems, statistics, economics, ML,
-  operations, and more. Each entry is written **symptom-first**: it describes
-  what the situation feels like from the inside, before you know the name.
-- **`match.mjs`** — a zero-dependency CLI: describe your situation, get
-  candidate names. No LLM, no network.
-- **`problem-namer.mjs`** — an ambient hook (reference integration: Claude
-  Code `UserPromptSubmit`; the pattern ports to any chat harness). It watches
-  prompts for the *naming-gap signature*, and when the catalog has a strong
-  candidate, injects it as context so the model you're already talking to can
-  say "there's a name for this." Default is silence.
-- **`eval/`** — a provider-neutral paired benchmark measuring whether the
-  catalog actually improves naming accuracy over the model's memory.
+| Adapter | Who notices the naming gap | What it is |
+|---|---|---|
+| [`adapters/claude-code-hook/`](adapters/claude-code-hook/problem-namer.mjs) | **The harness** (push — fires even when nobody thought to ask) | Claude Code `UserPromptSubmit` hook: instant regex + lexical gates, injects candidates or a name-it-yourself nudge |
+| [`adapters/mcp/`](adapters/mcp/server.mjs) | **The model**, mid-task (pull) | MCP server (stdio, zero deps): `name_problem` tool with explicit no-match, catalogs as resources, `name-this` prompt |
+| [`adapters/skill/`](adapters/skill/problem-namer/SKILL.md) | **The model**, from an ambient description | The surfacing protocol as an Agent Skill — find, verify, discriminate, or stay silent |
+| [`match.mjs`](match.mjs) | **You**, explicitly | Zero-dependency CLI: describe the situation, get candidates. No LLM, no network |
 
-## Try it
+The unknown-unknown case — you don't know a name exists, so you'd never ask —
+is why the push adapter (the hook) is the headline. The others cover the
+cases where the model or the user does notice.
+
+## Out of the box: no catalog, web search
+
+By default the framework ships **zero knowledge**. The hook detects the
+naming-gap signature and nudges the model you're already talking to: *name it
+if you confidently can, verify with web search before asserting, stay silent
+otherwise*. Slow and costs a search — but infinitely flexible, and the model
+plus the web already covers most famous named problems.
+
+`indexes/` is where local catalogs go, and it ships empty. Adding one buys
+the fast, free, offline tier — three tiers, cheapest first:
+
+1. **Model memory** — free; covers well-known problems.
+2. **Local catalog** (`indexes/*.json`) — instant, offline; the only tier
+   that works for vocabulary the model *cannot* know (your team's coined
+   terms — see below, it's where the measured lift is biggest).
+3. **Web search** — slow, costs money, covers everything else; also the
+   verification step for the other two.
+
+A naming the web-search tier produces is a candidate entry for your local
+catalog — the catalog is a memoization layer that grows as a byproduct of use.
+
+## Try it (no setup, no LLM)
 
 ```
 node match.mjs "our dashboard metric became the target everyone optimizes and it keeps climbing while the actual quality it was a proxy for gets worse"
@@ -41,58 +60,52 @@ Goodhart's Law  [statistics]  (score 13.5)
   the outcome rather than the proxy.
 ```
 
-Pipe in something longer:
+The CLI falls back to [`examples/problems.json`](examples/problems.json) — a
+189-entry catalog of named problems across software, distributed systems,
+statistics, economics, ML, and operations — when `indexes/` is empty.
 
-```
-pbpaste | node match.mjs
-```
+## Install the adapters
 
-## The ambient hook
-
-The interesting failure mode isn't asking a bad question — it's *circling* a
-named problem in 200 words because you don't know the 3-word name. The hook
-targets exactly that:
-
-1. **Gate 1 — naming-gap signature** (regex, instant): fires on explicit tells
-   ("is there a name for…", "what's this called") or hedged circumlocution
-   ("some kind of…", "the thing where…") inside a genuinely descriptive
-   passage. Ordinary work instructions ("fix the build") never trigger it.
-2. **Gate 2 — catalog match** (in-process lexical IDF scoring, instant): only
-   proceeds if some entry scores well above the noise floor.
-3. **Injection, not interruption**: candidates are added as context with the
-   instruction *"if ONE clearly matches, surface it briefly; if none fit,
-   ignore this entirely."* The model — not the regex — makes the final call.
-
-Both gates err toward silence. A wrong name is worse than no name: it sends
-the person off to read about the wrong problem with false confidence.
-
-### Install (Claude Code)
-
-Clone the repo anywhere, then add to `~/.claude/settings.json`:
+**Claude Code hook** — clone the repo anywhere, then in `~/.claude/settings.json`:
 
 ```json
 {
   "hooks": {
     "UserPromptSubmit": [
-      {
-        "hooks": [
-          { "type": "command", "command": "node /path/to/problem-namer/problem-namer.mjs" }
-        ]
-      }
+      { "hooks": [{ "type": "command", "command": "node /path/to/problem-namer/adapters/claude-code-hook/problem-namer.mjs" }] }
     ]
   }
 }
 ```
 
-The hook resolves `indexes/` relative to its own location, runs in
-single-digit milliseconds, and exits silently on anything unexpected.
+Runs in single-digit milliseconds on every prompt, exits silently on anything
+unexpected. Two precision gates before it says a word: a regex for the
+naming-gap signature ("is there a name for...", hedged circumlocution inside
+a descriptive passage — never ordinary work instructions), then, if a local
+catalog exists, an IDF-scored match that must clear a threshold. The model
+makes the final call; the injected instruction ends with *"never force a
+match; a wrong name is worse than silence."*
 
-### Other harnesses
+**MCP server** — works in any MCP client:
 
-The hook is ~90 lines with no dependencies. Any system that supports
-prompt-time context injection (middleware, a system-prompt preamble, an MCP
-resource) can use the same two-gate → inject-candidates pattern; the catalog
-format is the portable part.
+```
+claude mcp add problem-namer -- node /path/to/problem-namer/adapters/mcp/server.mjs
+```
+
+Exposes the `name_problem` tool (ranked candidates with distinguishing notes,
+or an **explicit no-match** — NIL is a real outcome, never a forced pick),
+every catalog as a readable resource, and a user-invokable `name-this` prompt.
+
+**Skill** — copy `adapters/skill/problem-namer/` into your skills directory
+(e.g. `~/.claude/skills/`). It carries the surfacing protocol: cheapest
+source first, verify before asserting, ask the discriminating question when
+two candidates are close, silence over a stretched match.
+
+**Enable the local catalog tier** for the hook, MCP server, and eval:
+
+```
+cp examples/problems.json indexes/
+```
 
 ## The catalog format
 
@@ -115,16 +128,18 @@ format is the portable part.
 - **`distinguish`** separates confusable neighbors (deadlock vs. livelock,
   Simpson's paradox vs. confounding) at selection time.
 
-Drop any number of `*.json` files into `indexes/` — the CLI, hook, and eval
-load them all.
+Drop any number of `*.json` files into `indexes/` — every adapter loads them
+all. `core/matcher.mjs` (the loader + IDF scorer all adapters share) is ~80
+lines if you want to port the pattern elsewhere.
 
 ## Build an index for your own vocabulary
 
 The measured lift (below) is largest not on famous problems but on
-**vocabulary the model cannot already know**: your team's internal coined
-terms, your architecture's named failure modes, your domain's jargon. A model
-can often name Goodhart's law from memory; it cannot name a concept that
-exists only in your design docs.
+**vocabulary neither the model nor the web can know**: your team's internal
+coined terms, your architecture's named failure modes. A model can often name
+Goodhart's law from memory; it cannot name a concept that exists only in your
+design docs — and web search can't help there either. This is the case the
+local catalog tier exists for.
 
 The recipe that worked for us:
 
@@ -138,11 +153,11 @@ The recipe that worked for us:
 
 ## Does it actually help?
 
-Paired evaluation: the same model names the same scenario twice — RAW (from
-memory) vs. +INDEX (scan the catalog's table of contents, select the matching
-entry). Scenarios are written symptom-first and never contain the name.
-Runs below used a deliberately small model (`claude-haiku-4.5`); the eval
-runner is provider-neutral (any OpenAI-compatible endpoint).
+Paired evaluation of the **catalog tier**: the same model names the same
+scenario twice — RAW (from memory) vs. +INDEX (scan the catalog, select the
+matching entry). Scenarios are written symptom-first and never contain the
+name. Runs below used a deliberately small model (`claude-haiku-4.5`); the
+eval runner is provider-neutral (any OpenAI-compatible endpoint).
 
 | benchmark | n | RAW | +catalog | helped / hurt | McNemar p |
 |---|---|---|---|---|---|
@@ -153,19 +168,22 @@ runner is provider-neutral (any OpenAI-compatible endpoint).
 
 Honest caveats:
 
-- **The lift lives exactly where the knowledge isn't already in the model.**
-  On famous problems a strong model is near ceiling without help; the +38pt
-  jump is on coined vocabulary the model has never seen (that benchmark is a
-  private lexicon, so it isn't included here — the build recipe above is).
-  In a sibling experiment on a knowledge domain the model already covered
-  well, the same mechanism moved nothing. A catalog is a supplement for
-  missing knowledge, not a general enhancer.
+- **These numbers describe the catalog tier, not the web-search default** —
+  the default path (detection + model + web search) has not been benchmarked
+  the same way yet. What the table shows is that a catalog helps exactly
+  where the knowledge isn't already in the model: on famous problems a
+  strong model is near ceiling without help; the +40pt jump is on coined
+  vocabulary the model has never seen (that benchmark is a private lexicon,
+  so it isn't included here — the build recipe above is). In a sibling
+  experiment on a knowledge domain the model already covered well, the same
+  mechanism moved nothing.
 - **Hurt cases are real** (4/80 on famous problems): a plausible-but-wrong
-  catalog pick can displace a correct from-memory answer. This is why the
-  ambient hook is precision-gated and the injected instruction says to stay
-  silent unless one entry clearly fits.
+  catalog pick can displace a correct from-memory answer. This is why every
+  adapter is precision-gated, the injected instructions say to stay silent
+  unless one entry clearly fits, and the MCP tool returns an explicit
+  no-match instead of the closest entry.
 
-Reproduce:
+Reproduce (uses `indexes/` if populated, else the example catalog):
 
 ```
 PN_API_KEY=... PN_MODEL=gpt-4o-mini node eval/run.mjs --split=holdout
