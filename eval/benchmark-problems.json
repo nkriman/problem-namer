@@ -1,0 +1,991 @@
+[
+  {
+    "id": "prob-0",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nIt's 2:47 PM and the nightly batch job that usually finishes in twenty minutes has been running for three hours. Priya opens the monitoring dashboard and sees two worker processes, Job A and Job B, both showing \"active\" but with zero rows processed for the last two hours. CPU usage on both is basically flat.\n\nShe pulls up the database session viewer. Job A is waiting on a lock held against the `invoices` table. She checks who's holding that lock — it's Job B. So she goes to look at what Job B is waiting on, expecting it to be almost done and about to release things. Instead, Job B is sitting there waiting on a lock against the `customers` table. She checks who's holding that one.\n\nIt's Job A.\n\nShe stares at the screen for a second, refreshes the page, thinking maybe it's a stale display. The numbers don't change. Both sessions have been in this exact waiting state since 11:52 AM. Neither one is going to move unless something intervenes — they're each patiently waiting for the other to finish first, and neither ever will. She kills Job B manually, and the whole queue lurches back to life instantly.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Deadlock",
+    "aliases": [
+      "deadly embrace",
+      "circular wait"
+    ],
+    "field": "distributed systems and concurrency",
+    "framework": "Coffman conditions (mutual exclusion, hold-and-wait, no preemption, circular wait) — break any one. Fixes: global lock ordering, lock timeouts, try-lock with backoff, resource hierarchies, wait-die/wound-wait, deadlock detection via wait-for graphs.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-1",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria's overnight batch job for the trading floor's risk report kept missing its 6 AM deadline, and nobody could explain why. The job itself was small—normally finishing in four minutes—but three times that week it dragged past forty minutes.\n\nShe started digging through the scheduler logs. The risk report ran as a high-priority process, above almost everything else on the box except the system's core allocation service. That allocation service, in turn, needed to briefly grab a lock on a shared config file—something it did constantly, for maybe ten milliseconds at a time, and normally nobody noticed.\n\nBut she found something strange: on the bad nights, a totally unrelated, low-priority nightly cleanup script also touched that same config file lock, and held it far longer than ten milliseconds because it was busy compressing old logs. Once it grabbed the lock, the allocation service would try to acquire it and simply wait. And since the allocation service was blocked, the risk report—despite being far more important—was starved too, sitting idle behind a process that, on paper, should never have been able to delay it at all.\n\nMeanwhile, a dozen medium-priority services kept happily running in between, oblivious that the top-priority job was the one actually stuck.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Priority inversion",
+    "aliases": [
+      "unbounded priority inversion"
+    ],
+    "field": "distributed systems and concurrency",
+    "framework": "Priority inheritance and priority ceiling protocols (famously the Mars Pathfinder bug fix); raise the lock holder's priority to the highest waiter's.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-2",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nIt's 2:47 AM when the pager goes off. Maria pulls up the dashboard for the recipe-recommendation API and sees database CPU pegged at 100%, response times climbing past eight seconds, and connection pool errors flooding the logs. Nothing changed in the last deploy — the last release was eleven hours ago and had been stable all day.\n\nShe checks Redis metrics first. Memory usage looks normal, hit rate looks fine historically, but right now the hit rate graph has a jagged cliff — dropping from 98% to almost 0% at exactly 2:45:00, the top of the hour. Traffic itself didn't spike; request volume is flat. But every one of those requests is now hitting Postgres instead of cache, and Postgres is running the same expensive JOIN query, in parallel, thousands of times a second, all against the same \"popular recipes this week\" row.\n\nShe traces it to a TTL: the entry was set to expire exactly on the hour, and thousands of concurrent users request that same endpoint. The moment the key expired, every single one of those requests found nothing in cache and went straight to the database at once, all trying to recompute and repopulate the exact same value simultaneously, burying the database under redundant identical work.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Cache stampede",
+    "aliases": [
+      "dogpile effect",
+      "cache miss storm"
+    ],
+    "field": "distributed systems and concurrency",
+    "framework": "Dogpile prevention: per-key mutex/single-flight recomputation, probabilistic early expiration (XFetch), stale-while-revalidate, and lock-and-refresh patterns.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-3",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya was three days into building the payment-confirmation flow for the checkout service when the bug reports started trickling in. A customer would pay, the warehouse system would say \"no order received,\" and yet the payment gateway logs showed a successful charge with an acknowledgment sent back to the warehouse API.\n\nShe pulled up the network traces. The order service sent a \"confirm reservation\" request to the warehouse, the warehouse processed it and sent back an \"OK, reserved,\" but that response never made it back to the order service—timeout. So the order service, having no confirmation, retried the reservation. Now the warehouse had two reservations for one order, or sometimes zero, if the retry itself got dropped and nobody noticed.\n\nShe tried adding a \"please acknowledge my acknowledgment\" step, thinking that would close the loop. Her teammate pointed out, half-joking, that now she just had the same problem one layer up: what if the acknowledgment-of-acknowledgment got lost? They stared at the whiteboard, half-drawn arrows going back and forth between two boxes labeled ORDER SERVICE and WAREHOUSE, both people slowly realizing that no matter how many messages they stacked on top of each other, neither side could ever be fully certain the other had truly gotten the last one.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Two Generals Problem",
+    "aliases": [
+      "two armies problem",
+      "coordinated attack problem"
+    ],
+    "field": "distributed systems and concurrency",
+    "framework": "Impossibility of guaranteed consensus over a lossy channel; accept it and design around it with idempotency, at-least-once + dedup, and eventual reconciliation rather than perfect agreement.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-4",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria had been tuning the deployment pipeline for three weeks, and the flakiness was driving her insane.\n\nEvery time she rolled back to the previous config version to compare behavior, the test suite passed cleanly. Then she'd reapply her new config, and it would fail. So far, so normal — that's why she was testing. But then she'd roll back to the *exact same* previous config again to confirm the baseline, and now it failed too. She'd swear she hadn't touched anything.\n\nShe started keeping a spreadsheet: Config A (old) → pass. Config B (new) → fail. Config A (old) again → fail. Config B again → pass. The results seemed to depend not on which config was active, but on what she'd just switched *from*. Fresh reboot into Config A: passes. Config A right after Config B: fails. Config A right after another run of Config A: passes.\n\nHer teammate suggested it was just server load or flaky tests, but the pattern was too consistent for that — it tracked the transition, not the absolute state. She stared at the spreadsheet, increasingly convinced that whatever she was measuring wasn't really about A versus B at all, but something about the switching itself that she couldn't yet name.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "ABA problem",
+    "aliases": [
+      "ABA"
+    ],
+    "field": "distributed systems and concurrency",
+    "framework": "Tagged/versioned pointers (counter stamps), double-width CAS, hazard pointers, or epoch/RCU-based reclamation to make the intervening change detectable.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-5",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nIt's 2:47 AM and Priya is staring at a Grafana dashboard that makes no sense. Their order-processing service is running on sixteen cores, CPU usage sits at a lazy 22%, and yet p99 latency has ballooned from 40ms to 6 seconds. No new deploys today. No traffic spike—if anything, requests per second dropped 15% because callers are timing out and retrying less aggressively than before.\n\nShe pulls up thread dumps from three consecutive fifteen-second intervals. Almost every worker thread is sitting in the same spot: waiting to acquire a mutex around the in-memory inventory cache. Only one thread at a time is ever actually inside that section, doing maybe half a millisecond of work, but forty threads are queued up behind it like cars stacked at a single tollbooth.\n\nWhat really confuses her is that this cache lookup used to be fast and uncontended. She checks recent changes and finds that last week someone added a periodic background job that grabs the same lock every 100ms to refresh stale entries. Individually it's cheap. But somehow, whenever that job runs, the whole request pipeline behind it seems to seize up in a chain reaction, threads piling up faster than they can drain, long after the refresh itself has finished.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Lock convoy",
+    "aliases": [
+      "convoy phenomenon",
+      "lock convoying"
+    ],
+    "field": "distributed systems and concurrency",
+    "framework": "Reduce hold time and lock frequency; use adaptive/spin-then-block locks, lock-free structures, backoff, or fair-but-batched handoff to break the convoy.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-6",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nOn-call at the hospital's staffing system, Priya got paged about a compliance violation: two doctors, Chen and Okafor, had both gone off-call for the same shift, leaving zero doctors on duty. That shouldn't have been possible—the app enforced a rule that at least one doctor had to remain on-call before anyone could drop out.\n\nShe pulled the logs. At 11:58pm, Chen opened the app, saw Okafor still listed as on-call, and figured it was safe to sign off. At 11:58:03, Okafor opened the app on his phone, saw Chen still listed as on-call, and signed off too. Both checks passed. Both updates committed. Neither doctor ever saw the other's change before making their own decision, because each read the \"current\" state a few seconds before the other's write landed.\n\nPriya stared at the timestamps, three seconds apart, and realized the system had never actually stopped two people from removing the last two constraints on a shared invariant at the same time—it only checked one row at a time, from each person's own point of view, without knowing what the other was about to do simultaneously.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Write skew",
+    "aliases": [
+      "write-skew anomaly"
+    ],
+    "field": "distributed systems and concurrency",
+    "framework": "Snapshot isolation's blind spot; fix with Serializable Snapshot Isolation, SELECT ... FOR UPDATE / materializing the conflict, or promoting to true serializable isolation.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-7",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya was debugging why the payment reconciliation job kept flagging valid transactions as \"future-dated and rejected.\" She pulled up the logs from the checkout service and the ledger service side by side. The checkout service stamped an order at 14:32:07, but by the time it hit the ledger service, the timestamp read 14:31:58 — nine seconds *earlier* than when it was supposedly created. That shouldn't be possible.\n\nShe checked the actual sequence of events using request IDs and traced them through the message queue. The order genuinely was created first, then processed downstream, yet the downstream timestamp claimed it happened before the upstream one. At first she suspected a queuing bug or an out-of-order delivery issue, so she added sequence numbers to every event. The sequence numbers were correct — everything arrived and processed in the right order. Only the wall-clock timestamps were lying to her.\n\nShe SSH'd into both containers and ran `date` on each. The checkout host said 14:47:03. The ledger host said 14:46:44. Nineteen seconds apart, and drifting further each time she checked. Nothing in her code was wrong — the two machines themselves simply disagreed about what time it currently was.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Clock skew",
+    "aliases": [
+      "clock drift",
+      "time-of-day skew"
+    ],
+    "field": "distributed systems and concurrency",
+    "framework": "Don't trust wall clocks for ordering: use logical clocks (Lamport), vector clocks, hybrid logical clocks, or bounded-uncertainty clocks (Spanner TrueTime with commit-wait).",
+    "split": "dev"
+  },
+  {
+    "id": "prob-8",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nIt's 2:47 AM and Priya's phone won't stop buzzing. The alerting service she built six months ago is now paging her every ninety seconds instead of only when something actually breaks.\n\nShe RDPs into the box. Memory usage on the notification worker is climbing in a straight line—4GB, 6GB, 9GB—and there's no obvious leak in the code. She checks the message broker dashboard: the topic that feeds order-confirmation emails has 340,000 pending messages. Three hours ago it had twelve.\n\nNothing crashed. No exceptions in the logs. The API that accepts new orders is humming along, happily returning 200s in under 50ms. But the little Python script that's supposed to pull messages off that topic, render a template, and hit the email provider's API is taking almost two full seconds per message now, because the email provider started rate-limiting them an hour ago.\n\nSo orders keep flowing in at the normal rate, get accepted instantly, get dropped onto the topic—and just sit there, piling up, while the consumer chips away at a rate a fraction of what's arriving. Priya stares at the growing number, realizing that if she doesn't do something in the next few minutes, the broker itself is going to run out of disk space and take every other topic down with it.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Missing backpressure",
+    "aliases": [
+      "unbounded queue growth",
+      "fast producer / slow consumer"
+    ],
+    "field": "distributed systems and concurrency",
+    "framework": "Flow control/backpressure: bounded buffers, blocking or reactive-streams demand signaling, credit-based flow control, and load shedding/drop policies to propagate slowness upstream.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-9",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had been staring at the same batch job for forty minutes. It was supposed to reconcile inventory records overnight, but this morning the dashboard still showed it \"Running.\" No error, no crash, just a spinning icon and a log file that hadn't grown a single line in half an hour.\n\nShe pulled up the code to see if she could tell whether it was actually stuck or just slow. The function looped through records, and buried inside was a recursive call that depended on a condition tied to data from another team's API. She traced through the logic by hand, tried to simulate what would happen with the current dataset, but the branching got complicated fast — the condition depended on a value that depended on a callback that depended on whatever the upstream service decided to return, which itself could change mid-run.\n\nShe thought about writing a script that would watch the process and automatically kill it if it was \"actually stuck.\" But the more she thought about it, the more she realized there was no clean way to distinguish \"still legitimately computing\" from \"will never finish\" without either waiting forever or already knowing the answer to the exact question the job itself was trying to answer.\n\nShe ended up just setting a timeout and hoping five minutes was enough.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Halting Problem",
+    "aliases": [
+      "undecidability of halting",
+      "Turing's halting problem"
+    ],
+    "field": "algorithms, complexity, and computability",
+    "framework": "Diagonalization proves no such general decider exists. Unlocks reductions to prove other problems undecidable, and the pragmatic escapes: timeouts/watchdogs, termination heuristics, ranking functions, and total (guaranteed-terminating) languages.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-10",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had two weeks to write the delivery-route scheduler for the bakery chain's new logistics app. Twelve trucks, forty-three stores, and a handful of constraints: each truck had a max load, each store a delivery window, and fuel costs to minimize. She figured a smart script could just try combinations and pick the cheapest valid one.\n\nHer first version worked beautifully on the test case with four stores. She scaled it up to ten stores, and it took a few seconds longer. Fine. Then she plugged in all forty-three stores and let it run overnight. By morning, it hadn't finished.\n\nShe tried optimizing the code, rewriting loops in a faster language, buying time on a beefier cloud instance. She shaved routes down to thirty stores, and it finished in under a minute. Thirty-five stores took an hour. Forty stores took most of a day. She added one more store, expecting maybe a longer wait — instead the estimate ballooned into years.\n\nShe started cutting corners: accepting \"good enough\" routes instead of the cheapest, adding rules to skip unlikely combinations early. Nothing brought it back down to something a nightly job could handle. Every extra store didn't just add work — it seemed to multiply it.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "NP-completeness",
+    "aliases": [
+      "NP-hardness",
+      "intractability",
+      "the P vs NP wall"
+    ],
+    "field": "algorithms, complexity, and computability",
+    "framework": "Prove it via reduction from a known hard problem (SAT, 3-SAT, clique). Naming it stops the search for a fast exact algorithm and unlocks the real toolbox: approximation with ratio guarantees, heuristics/metaheuristics, SAT/ILP/CP solvers, and fixed-parameter tractability.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-11",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya was building a nearest-neighbor recommendation system for a boutique furniture retailer, matching customers to similar past buyers based on purchase behavior. With just three features—budget, room size, and style preference—the model worked beautifully. Similar customers clustered together, recommendations felt intuitive, and the sales team loved it.\n\nThen marketing asked her to incorporate more signals: time on site, click patterns across twelve categories, seasonal timing, referral source, age bracket, past return rate, newsletter engagement, and a dozen other behavioral flags. Thirty-some features in total. Confident that more data meant better matches, she rebuilt the model.\n\nThe results were bizarre. Customers who seemed obviously similar—same budget, same style, same room size—now showed up as distant neighbors, while people with wildly different profiles clustered together. She checked the distance calculations obsessively, certain there was a bug. There wasn't. When she printed out the actual distance values, something strange emerged: almost everyone was roughly the same distance from everyone else. The nearest neighbor and the farthest neighbor differed by only a few percent. It was as if the space had flattened out, erasing any meaningful notion of \"close\" or \"far,\" no matter how she normalized or scaled the inputs.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Curse of dimensionality",
+    "aliases": [
+      "dimensionality curse",
+      "Hughes phenomenon"
+    ],
+    "field": "algorithms, complexity, and computability",
+    "framework": "In high dimensions, distance concentration and exponential volume growth break intuition. Unlocks dimensionality reduction (PCA, random projections), feature selection, metric learning, and approximate nearest-neighbor (LSH) instead of exact geometry.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-12",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had spent two weeks optimizing the nightly data pipeline. The big win came from rewriting the transformation stage to run across sixteen worker nodes instead of four—the part that used to take forty minutes now finished in under three. She expected the whole job to shrink proportionally, maybe down to a third of its old runtime.\n\nIt didn't. The full pipeline went from ninety minutes to sixty-eight.\n\nShe pulled up the job logs, confused, and started timing each stage individually. The transformation stage really had dropped to almost nothing. But the initial file ingestion—reading compressed logs from a single archive—still took twenty-two minutes, untouched, because it ran on one node by design. The final validation and write-back step, also single-threaded due to a database lock, ate another eighteen minutes.\n\nShe added more workers to the transformation stage again, pushing it to thirty-two nodes, hoping to shave off more time. The total barely moved—maybe two minutes faster. She stared at the timing breakdown, doing rough math in her head: no matter how fast that middle stage got, the other two stages were a floor she couldn't sink below, and they were eating up almost half the job now.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Amdahl's Law",
+    "aliases": [
+      "Amdahl's argument",
+      "law of diminishing parallel returns"
+    ],
+    "field": "algorithms, complexity, and computability",
+    "framework": "Speedup is capped at 1/(s + (1−s)/N) by the serial fraction s. Redirects effort to shrinking the serial portion or the sync/communication overhead, and pairs with Gustafson's Law when you can scale the problem size instead.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-13",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya was staring at the ticket queue dashboard, trying to figure out why customer response times had ballooned to four hours when the team's average was usually under thirty minutes.\n\nShe scrolled through the log. At 9:03 AM, someone had submitted a request to reconcile an entire quarter's worth of transaction records — a report that took the shared processing job nearly three hours to generate. Behind it in line sat forty-two simple tickets: password resets, address changes, single-invoice lookups. Each one would normally take ninety seconds to clear.\n\nBut the system processed tickets strictly in the order they arrived, one at a time, through a single pipeline. So the quarterly reconciliation request sat there chewing up the processor while every quick, trivial ticket behind it just... waited. A customer who needed her shipping address corrected — a two-second database update — didn't get looked at until the giant report finished, three hours later.\n\nPriya pulled up the complaints inbox. Dozens of customers were furious about \"slow support\" for issues that should've been resolved instantly. Meanwhile the one person who'd submitted the heavy report wasn't even complaining — they didn't know they'd single-handedly stalled everyone else.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Convoy effect",
+    "aliases": [
+      "convoy phenomenon",
+      "head-of-line blocking (queueing)"
+    ],
+    "field": "algorithms, complexity, and computability",
+    "framework": "FIFO scheduling lets a slow item block fast ones. Unlocks shortest-job-first / shortest-remaining-time scheduling, preemption/time-slicing, and separating traffic into multiple queues by cost class.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-14",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya was reviewing the file-upload service after a security audit flagged something odd. The code first checked whether a file called \"temp_export.csv\" already existed in the shared folder—if not, it created it, wrote a batch of user records, then handed the path off to the email service to attach and send.\n\nOn a normal day this worked fine. But during the incident, two export jobs had kicked off almost simultaneously—one from a scheduled nightly task, another triggered manually by a support rep chasing a customer request. Both jobs checked the folder within milliseconds of each other, both saw no file present, and both proceeded to create and write to \"temp_export.csv\" as if they owned it exclusively.\n\nThe nightly job started writing its rows first. Then the manual job's write began, truncating the file and starting over with a different customer's data. By the time the first job reached the \"attach and send\" step, the file on disk was no longer what it had written—it now contained the second job's data, mid-write, incomplete.\n\nThe support rep's customer got an email with garbled numbers and someone else's account rows mixed in. Priya stared at the logs, confused how a file that \"didn't exist yet\" for both jobs somehow ended up shared between them.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "TOCTOU race condition",
+    "aliases": [
+      "time-of-check to time-of-use",
+      "check-then-act race"
+    ],
+    "field": "algorithms, complexity, and computability",
+    "framework": "The check and the use aren't atomic. Unlocks operating on handles/descriptors instead of re-resolvable names, atomic check-and-act primitives (open-with-flags, compare-and-swap), and transactions/locks spanning the whole operation.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-15",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya was building a small structural analysis tool for a civil engineering client, calculating deflection differences between two nearly identical beam load simulations to check sensitivity to a tiny design change. The simulations output values like 1234.5678234 and 1234.5678219, and her code subtracted them to get the delta, then divided by a step size to approximate a derivative.\n\nThe results looked fine for large perturbations, but when she shrank the step size to get a more \"accurate\" derivative, the numbers went haywire — jumping between wildly different values, sometimes flipping sign entirely between runs that should have been nearly identical. She checked her formula three times, printed out the raw simulation outputs, and they looked correct to many decimal places. But once she looked at just the difference itself, isolated from the division, she noticed something strange: two numbers agreeing to eight digits were producing a difference that was only accurate to two digits, like the computer had thrown away most of the meaningful information the instant it did the subtraction.\n\nShe tried increasing the precision of the simulation outputs, and the problem got better, but it didn't feel like a real fix — more like postponing something she didn't yet understand. Her colleague glanced at the code and said, \"yeah, that's a classic issue with subtracting numbers that are too close together.\"\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Catastrophic cancellation",
+    "aliases": [
+      "loss of significance",
+      "subtractive cancellation"
+    ],
+    "field": "algorithms, complexity, and computability",
+    "framework": "Subtracting close numbers amplifies relative error. Unlocks numerically stable reformulations (e.g., the alternate quadratic formula, log-sum-exp, Kahan summation) and error analysis to reorder operations and avoid the fragile subtraction.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-16",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya, a data analyst at a mid-sized insurance company, was reviewing a new fraud-detection model the team had just deployed. The model flagged suspicious claims with 95% accuracy, and everyone was thrilled. During a meeting, the head of claims processing announced that the system had flagged a policyholder named Tom Reyes as likely fraudulent, and suggested his claim be denied outright pending investigation.\n\nPriya pulled up the numbers before agreeing. Out of the 10,000 claims processed that month, only about 50 were actually fraudulent. The model, being 95% accurate, would correctly flag around 47 of those true fraud cases. But it would also incorrectly flag about 5% of the 9,950 legitimate claims — roughly 497 innocent policyholders caught in the net.\n\nShe stared at the spreadsheet: of the total 544 people flagged by the system, only 47 were actually committing fraud. That meant if Tom Reyes was flagged, the odds he was actually a fraudster were less than 10%, not 95% as everyone in the room assumed. Yet her colleagues kept treating the flag itself as near-certain proof of guilt, ignoring how rare fraud was in the first place compared to how many honest claims existed.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Base Rate Fallacy",
+    "aliases": [
+      "base rate neglect",
+      "prevalence neglect",
+      "false positive paradox"
+    ],
+    "field": "statistics, probability, and experiment design",
+    "framework": "Naming it invokes Bayes' theorem and the distinction between sensitivity/specificity and positive predictive value; the fix is to combine the likelihood ratio with the prior prevalence rather than reading the test's accuracy as the answer.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-17",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya pulled the quarterly A/B test results for the checkout redesign. The overall conversion rate barely moved—up 0.3%, not significant. But when she sliced the data by device type, browser, time of day, and user segment, something caught her eye: mobile Safari users aged 25-34 showed a 14% lift, p=0.03. She felt a jolt of excitement and started drafting a summary for the product team, framing it as \"the redesign works especially well for younger mobile users.\"\n\nBefore hitting send, she mentioned it to a colleague, who asked, \"How many other slices did you check?\" Priya counted: 6 device categories, 4 browsers, 3 time windows, 5 age brackets, 2 genders—dozens of combinations, each tested at the standard 95% confidence threshold. She'd found one significant result among roughly 40 comparisons.\n\nShe stared at her spreadsheet, uneasy. If she'd flipped a coin 40 times, getting a few \"heads\" streaks wouldn't mean the coin was rigged. Was her mobile Safari finding real, or was it just what happens when you check enough subgroups and wait for one to cross the threshold by chance? She didn't have a name for the discomfort, but she knew she couldn't trust that number the way she had five minutes earlier.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Multiple Comparisons Problem",
+    "aliases": [
+      "multiplicity",
+      "look-elsewhere effect",
+      "family-wise error inflation",
+      "multiple testing problem"
+    ],
+    "field": "statistics, probability, and experiment design",
+    "framework": "Running many tests inflates the chance of at least one false positive; corrections include Bonferroni/Holm for family-wise error and Benjamini–Hochberg for false discovery rate, or a pre-specified single primary endpoint.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-18",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria pulls up the quarterly engagement data for the app's new onboarding flow. The overall conversion numbers look flat compared to the control group, barely a rounding error apart. Before writing off the experiment, she decides to slice the data by device type and finds Android users converted noticeably better. Interesting, she thinks, and digs further—maybe it's really about new versus returning users. Sure enough, when she filters to first-time users only, the effect sharpens. She checks weekday versus weekend signups next, and one segment jumps out with a gap that looks too large to be coincidence.\n\nBy the time she's ready to write the report, she's tested age brackets, referral sources, session length cutoffs, and three different definitions of \"engaged user.\" Each pass took her closer to a narrative she could present confidently to the product team: the onboarding flow works, but only for a specific subgroup. She saves the cleanest chart, the one with the clearest split, and starts building slides around it.\n\nIt isn't until a colleague asks, almost offhand, \"How many other ways did you cut this before you found that one?\" that she pauses, chart still open, and realizes she doesn't actually have an answer.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Garden of Forking Paths",
+    "aliases": [
+      "p-hacking",
+      "researcher degrees of freedom",
+      "data dredging",
+      "specification search"
+    ],
+    "field": "statistics, probability, and experiment design",
+    "framework": "Flexibility in analysis choices constitutes implicit multiple testing even without explicit repeated tests; remedies are pre-registration, a locked analysis plan, held-out data, and multiverse/specification-curve analysis.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-19",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaya runs analytics for a mid-sized hospital network and gets pulled into a meeting because someone on the board noticed something alarming: among patients admitted with pneumonia, those who also have diabetes seem to have noticeably better survival rates than those without diabetes. It's a strange, almost backwards result, and one physician jokes that maybe diabetes is \"protective.\" Maya digs into the raw numbers herself, pulling records going back three years, and the pattern holds up consistently across every quarter.\n\nShe starts cross-checking against outside data — statewide health surveys, insurance claims, anything that includes people who never set foot in a hospital. Diabetes is, if anything, linked to worse pneumonia outcomes out in the general population. So why does her own hospital's admitted patient data show the opposite?\n\nShe starts mapping out exactly who gets admitted versus sent home. A patient with diabetes showing even mild pneumonia symptoms gets admitted immediately as a precaution. A patient without diabetes has to look considerably sicker before doctors decide to admit them. So the non-diabetic patients who do end up admitted are, on average, in a more severe state to begin with — while the diabetic patients admitted include many milder cases swept in out of caution.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Berkson's Paradox",
+    "aliases": [
+      "Berkson's bias",
+      "admission rate bias",
+      "collider stratification bias"
+    ],
+    "field": "statistics, probability, and experiment design",
+    "framework": "Conditioning on a common effect (a collider) of two variables induces a spurious association between them; the DAG-based fix is to avoid selecting or stratifying on that collider, or to model the selection mechanism.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-20",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya, a public health analyst for a mid-sized county, pulled district-level data comparing average income to flu vaccination rates across twelve school zones. The pattern was striking: districts with higher average household income showed lower vaccination rates overall. She flagged it in her report, suggesting that wealthier families might be more vaccine-hesitant, and recommended the outreach team target higher-income neighborhoods with educational campaigns.\n\nHer supervisor asked her to double-check by looking at household-level survey data before the campaign launched. When Priya cross-referenced individual families instead of district averages, the pattern flipped—within every district, it was actually the lower-income households that had lower vaccination rates. The wealthy districts just happened to contain small, dense pockets of lower-income apartment complexes with poor access to clinics, and those pockets were dragging down the district average enough to create the illusion.\n\nPriya sat staring at her screen, unsettled. The zoomed-out numbers had told a completely different story than the zoomed-in numbers. If she'd launched the campaign based on the district-level trend, they would have spent outreach dollars targeting exactly the wrong households, while the families who actually needed help remained invisible in the aggregate statistics.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Ecological Fallacy",
+    "aliases": [
+      "aggregation fallacy",
+      "Robinson's fallacy",
+      "cross-level inference error"
+    ],
+    "field": "statistics, probability, and experiment design",
+    "framework": "Group-averaged associations need not hold at the individual level; the fix is to keep the unit of analysis matched to the unit of inference and to use multilevel/hierarchical models when levels are mixed.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-21",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria had been a quality auditor at the pharmaceutical packaging plant for six years, but this was the first time she'd been asked to testify in an internal disciplinary hearing. The lab had found that a rare contamination marker appeared in only 1 out of every 10,000 clean batches. Batch 4471, produced under the night-shift supervisor's watch, tested positive for that marker.\n\nThe compliance officer leaned forward and asked her directly: \"So what's the probability this batch is actually contaminated, given that positive test?\"\n\nMaria opened her mouth to answer \"99.99%\" — it felt obvious, almost too obvious to need explaining. The test was wrong only one time in ten thousand, so surely a positive result meant the batch was almost certainly bad.\n\nBut something nagged at her. The plant ran roughly 200,000 batches a year, and contamination itself was vanishingly rare — maybe one truly bad batch per month. If she multiplied out how many clean batches would still trigger a false positive purely by volume, the numbers started looking uncomfortably similar to the number of genuinely contaminated ones. She stared at her legal pad, chewing her pen cap, realizing her gut answer and the arithmetic were pulling in completely different directions, and she wasn't sure which one the committee expected her to trust.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Prosecutor's Fallacy",
+    "aliases": [
+      "transposed conditional",
+      "confusion of the inverse",
+      "inverse conditional fallacy"
+    ],
+    "field": "statistics, probability, and experiment design",
+    "framework": "P(evidence | innocent) is not P(innocent | evidence); Bayes' theorem and likelihood ratios (weighed against the relevant reference population) restore the correct posterior.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-22",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had spent three weeks building a model to predict which customers would cancel their gym memberships. She'd fed it eighteen months of data—login times, class attendance, payment history, even the weather on the day they signed up. When she tested it against the historical data, the results were stunning: 98% accuracy. She showed her manager, who was thrilled and asked her to start using it on next month's live customer data immediately.\n\nThe trouble started right away. The model flagged a woman who'd been a member for six years and attended religiously as \"high risk of cancellation,\" while completely missing three people who canceled within the week. Priya went back and reran the numbers on last year's data—still 98%. She couldn't understand the gap. She dug into the model's logic and found it had latched onto strange details, like the exact number of days between a person's third and fourth visit, or whether their sign-up happened on a Tuesday. These patterns matched perfectly in the old data, almost too perfectly, but they meant nothing when applied to new members walking through the door today. Whatever the model had learned, it wasn't anything a human would call a real pattern about gym habits.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Overfitting",
+    "aliases": [
+      "over-parameterization",
+      "curve fitting",
+      "capitalizing on chance"
+    ],
+    "field": "statistics, probability, and experiment design",
+    "framework": "Excess model flexibility relative to signal drives the bias–variance tradeoff toward variance; remedies are cross-validation, regularization (ridge/lasso), simpler models, and honest out-of-sample evaluation.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-23",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria had been analyzing outcomes for the hospital's new stroke rehabilitation program for three weeks, and the numbers looked almost too good. Patients who received at least three sessions of the intensive gait-training protocol had a 90-day mortality rate of 4%, compared to 19% for patients who never got the protocol at all. She'd already drafted a slide for Thursday's quality meeting touting the program's life-saving potential.\n\nThen her colleague Dev, going through the raw data with her, pointed at a row: a patient who'd died on hospital day 6, before ever being scheduled for a single training session, had been excluded from the \"never got the protocol\" group entirely — because he was still technically \"pending enrollment\" when he died. Maria scrolled further and found six more like him. Each had been quietly folded out of the comparison, or worse, some had been folded into the \"received protocol\" group simply because they were on the schedule, even though they died before their first session started.\n\nShe sat back, unsettled. The therapy group looked healthier partly because you had to survive long enough to start being counted as a therapy patient in the first place. Something about the math felt rigged, even though no one had touched it dishonestly.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Immortal Time Bias",
+    "aliases": [
+      "guarantee-time bias",
+      "survivor treatment selection bias",
+      "time-dependent bias"
+    ],
+    "field": "statistics, probability, and experiment design",
+    "framework": "Misclassifying person-time during which the outcome could not occur inflates the treated group's survival; correct with time-dependent covariates, landmark analysis, or properly aligned start-of-follow-up.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-24",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria's team was testing a new onboarding tutorial for their app. They ran it in 6 test markets and kept the old version in 6 control markets, tracking daily active users over three weeks. When she ran the numbers, the difference looked huge—users in the new tutorial markets were 12% more active on average, and with 21 days of data per market, she had 252 data points in each group. The t-test came back with a tiny p-value, practically screaming significance.\n\nShe wrote up the results and sent them to her manager, feeling good about the launch recommendation. But something nagged at her during the team review. One market in the treatment group, Denver, had an unusual spike the whole three weeks because of an unrelated marketing campaign that happened to overlap. When she pulled Denver out, the effect nearly vanished.\n\nThat's when it hit her: she didn't actually have 252 independent observations in each group. She had 6 markets, and every day within a market was riding the coattails of whatever was happening in that city that month. The huge sample size had been an illusion—she'd basically run an experiment with an effective sample size of 6, not 252, and treated it like the latter.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Pseudoreplication",
+    "aliases": [
+      "unit of analysis error",
+      "clustered data ignored",
+      "non-independence of observations"
+    ],
+    "field": "statistics, probability, and experiment design",
+    "framework": "Treating clustered/correlated observations as independent understates variance and inflates false positives; the fix is mixed-effects/hierarchical models, cluster-robust standard errors, or analysis at the correct experimental unit.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-25",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had spent three weeks building a churn model for the telecom company, and the results were almost embarrassing to present: 99.2% accuracy on her holdout set. Her manager whistled when she showed the ROC curve — nearly a perfect square. She felt a flush of pride mixed with a nagging itch she couldn't place.\n\nThe model went into a shadow deployment the following Monday, scoring live customer accounts before any human intervention. By Thursday, the ops team was confused: the model was flagging almost no one, and the handful of accounts it did flag as \"high churn risk\" had already been closed for weeks.\n\nDigging through the feature list at 11pm with a cold coffee, Priya noticed a column called \"account_status_last_updated\" — populated only after a customer had actually cancelled. She'd pulled the full customer table for both training and testing from the same nightly snapshot, so any account already flagged as terminated by the time of extraction carried little breadcrumbs forward: closure dates, final invoice flags, retention-call notes typed by agents after the fact.\n\nShe stared at the screen, replaying the training pipeline in her head, realizing the \"future\" had been sitting quietly inside her \"present\" the entire time.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Data Leakage",
+    "aliases": [
+      "target leakage",
+      "train-test contamination",
+      "information leakage"
+    ],
+    "field": "machine learning and data",
+    "framework": "Names the failure where information from outside the training-time knowledge horizon sneaks into features. Fix: strict temporal/causal cutoffs, fit preprocessing only on training folds inside the CV loop (pipelines), audit each feature for 'would this be known before the label?', and separate holdout by entity/time.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-26",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya was building a customer-churn model for the subscription box company she'd just joined. The original dataset had six features—tenure, monthly spend, support tickets, login frequency, plan type, and region—and her k-nearest-neighbors model hit 84% accuracy almost immediately. Encouraged, she asked the data team for everything they had. They handed her a table with 140 columns: click timestamps, device fingerprints, browser versions, dozens of one-hot encoded product categories, seasonal flags, and engagement scores nobody had documented well.\n\nShe dropped it all into the same model expecting a bump in performance. Instead, accuracy collapsed to 61%, barely better than guessing. Confused, she started plotting pairwise distances between customers who should have been obviously similar—same tenure, same spend, same behavior pattern. The distances came back almost identical to distances between customers who had nothing in common. Every point seemed to sit roughly the same distance from every other point, like the neighborhood structure had simply dissolved.\n\nShe spent a full day assuming it was a bug—checking for NaNs, scaling issues, duplicate columns. Nothing explained it. Adding more information had somehow made the data less informative, and she couldn't understand why more features would make similar customers look further apart instead of closer together.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "The Curse of Dimensionality",
+    "aliases": [
+      "Bellman's curse",
+      "high-dimensional sparsity"
+    ],
+    "field": "machine learning and data",
+    "framework": "Names why volume grows exponentially with dimensions. Unlocks dimensionality reduction (PCA, UMAP), feature selection, manifold learning, and distance-metric caution in kNN/clustering.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-27",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya was building a regression model to predict employee attrition for the HR team, feeding in years of experience, age, salary, and tenure at the company as predictors. When she first ran the model, the coefficient for years of experience came back negative and statistically significant — implying that more experienced people were more likely to quit, which made no sense given what she knew about the department. She dropped tenure from the model just to see what would happen, and suddenly the coefficient on years of experience flipped to positive and became insignificant. She added tenure back and removed age instead, and the standard errors on the remaining variables ballooned, with confidence intervals so wide they were nearly useless. Nothing about the underlying data had changed — she was just swapping which columns she included — yet the story the model told kept flipping depending on tiny tweaks to which variables she kept in. She checked for outliers, tried different subsets of employees, even re-pulled the data from the HR system, but the instability persisted. Her manager asked her to just \"pick the version that made sense,\" but Priya couldn't shake the feeling that something structural in how these variables moved together was causing the model to behave so erratically.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Multicollinearity",
+    "aliases": [
+      "collinearity",
+      "correlated predictors"
+    ],
+    "field": "machine learning and data",
+    "framework": "Unlocks VIF diagnostics, ridge regression, PCA, and dropping/combining redundant predictors. Explains why coefficient interpretation breaks even when prediction doesn't.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-28",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had been training the deep recurrent network for three days straight, and something was clearly broken. She stared at the loss curve on her monitor: for the first two epochs it barely moved, hovering at 4.2, then 4.19, then 4.18, like the model had given up before it even started. She checked her learning rate, tripled it, and reran the training. This time the loss did something worse—it dropped for a few batches, then suddenly spiked to NaN, the numbers overflowing into meaninglessness.\n\nShe added print statements to inspect the weight updates layer by layer. The gradients in the last few layers looked reasonable, small but present. But when she scrolled back to the earlier layers, closer to the input, the numbers were essentially zero—0.0000003, 0.0000001, values so tiny they might as well not exist. Those layers weren't updating at all. Meanwhile, when she'd bumped up the learning rate to compensate, the gradients in certain layers had ballooned into the millions before crashing the whole computation.\n\nShe posted in the team Slack: \"Is it normal for gradients to basically die in the first layers but blow up randomly in others? Feels like the network is either frozen or on fire, no in-between.\"\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Vanishing/Exploding Gradients",
+    "aliases": [
+      "vanishing gradient problem",
+      "exploding gradients"
+    ],
+    "field": "machine learning and data",
+    "framework": "Unlocks ReLU activations, careful initialization (Xavier/He), batch/layer normalization, residual connections, gradient clipping, and LSTM/GRU gating for sequences.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-29",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had spent three weeks building a model to predict which hospital patients would be readmitted within 30 days. When she finally ran it on the test set, the accuracy came back at 94% — way higher than anything her team had achieved before. She felt a jolt of excitement, immediately followed by suspicion. Nothing was ever this good on the first real try.\n\nShe started digging through the feature importance rankings, expecting to see things like blood pressure trends or medication counts near the top. Instead, the single strongest predictor was \"which hospital wing the patient was discharged from.\" That made no clinical sense. She pulled up the raw records and noticed that one wing handled almost exclusively hospice and end-of-life care — patients who, by definition, wouldn't be \"readmitted\" because they didn't survive to be readmitted at all.\n\nThe model had latched onto that quirk of the data completely by accident, achieving impressive numbers without learning anything about actual patient risk. Priya sat there staring at the screen, unsettled — the model looked brilliant on paper, but she had a growing feeling it would fall apart the moment it touched a different hospital's data.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Spurious Correlation",
+    "aliases": [
+      "confounding",
+      "shortcut learning",
+      "Clever Hans effect"
+    ],
+    "field": "machine learning and data",
+    "framework": "Unlocks causal inference (confounders, DAGs), invariant risk minimization, dataset debiasing, saliency auditing, and out-of-distribution testing to expose the shortcut.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-30",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya manages content recommendations for a mid-sized news app. Three months ago, she deployed a new engagement-based ranking model, and the click-through metrics looked great immediately. But by week six, something felt off. She pulled up the topic distribution report and noticed the spread of stories being shown had narrowed dramatically—political commentary and outrage-bait pieces now dominated over 60% of impressions, up from 15%.\n\nShe dug into the logs. The model had learned that inflammatory headlines got clicks, so it surfaced more of them. Users who clicked were then shown even more similar content, and the ones who didn't like it simply left the app, leaving behind a user base whose remaining behavior looked like it validated the model's choices. Each week's training data was pulled from the previous week's user interactions—interactions that had already been shaped by the model's own prior output.\n\nWhen she compared this month's cohort to a frozen baseline group still getting the old ranking, the difference was stark: the baseline group's interests looked nothing like what the \"live\" model now assumed was universal. Somehow the system had convinced itself, using its own downstream effects as evidence, that it understood what people wanted—when really it had just been talking to itself the whole time.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Feedback Loops",
+    "aliases": [
+      "runaway feedback loop",
+      "self-fulfilling prediction",
+      "echo chamber effect",
+      "model-induced distribution shift"
+    ],
+    "field": "machine learning and data",
+    "framework": "Unlocks the study of performative prediction and pernicious feedback: counterfactual logging, off-policy evaluation, exploration, and monitoring for self-reinforcing drift.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-31",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had been staring at the confusion matrix for twenty minutes, and it still didn't make sense. Her model for sorting customer support tickets into \"billing,\" \"technical,\" and \"account access\" was stuck at 81% accuracy no matter what she tried—more layers, different embeddings, hyperparameter sweeps, nothing moved the needle past that ceiling.\n\nShe decided to manually review fifty of the tickets the model kept getting \"wrong.\" The third one stopped her cold: a customer wrote \"I can't log into my account to pay my invoice,\" and someone on the support team had tagged it as \"technical.\" The model had predicted \"billing,\" which seemed reasonable given the word \"invoice.\" She kept going. A ticket about a declined credit card was tagged \"account access.\" One asking to reset a password was tagged \"billing,\" presumably because the agent was rushing between calls and clicked the wrong dropdown option.\n\nOut of fifty tickets, she counted eleven where she genuinely disagreed with the original tag—not because the model was smarter, but because whoever categorized these tickets during a busy shift had just been sloppy or inconsistent. Her model wasn't failing. It was being graded against answers that were themselves wrong.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Label Noise",
+    "aliases": [
+      "noisy labels",
+      "annotation error",
+      "mislabeled data",
+      "ground-truth error"
+    ],
+    "field": "machine learning and data",
+    "framework": "Unlocks inter-annotator agreement metrics (Cohen's kappa), robust loss functions, confident learning / label cleaning, noise-transition modeling, and consensus labeling.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-32",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya ran the underwriting team for a small pet insurance startup that had just launched a no-medical-exam policy—anyone could sign up online in five minutes, no vet records required, priced at a flat rate based on breed and age averages.\n\nSix months in, the claims were pouring in fast, and not for routine checkups. A golden retriever needed a $4,000 knee surgery within the first sixty days of coverage. A cat came in with a chronic kidney condition that had clearly been managed for years before the owner ever bought the plan. Meanwhile, healthy young dogs from families who just wanted peace of mind were barely filing anything at all.\n\nPriya pulled the numbers and noticed something odd: the average claims cost per policyholder was nearly triple what her actuary had modeled from national pet health surveys. She raised premiums 20% to cover the gap. Renewal season came, and the cheap, healthy pet owners canceled in droves, unwilling to pay more for coverage they rarely used—while the owners with sick or aging animals renewed without hesitation, no matter the price.\n\nBy the third quarter, her policyholder pool looked nothing like the general pet population she'd priced against, and the losses kept climbing.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Adverse Selection",
+    "aliases": [
+      "market for lemons",
+      "lemons problem",
+      "hidden information",
+      "negative selection"
+    ],
+    "field": "economics, game theory, and mechanism design",
+    "framework": "Akerlof's asymmetric-information market failure. Fix: screening (menus, deductibles), signaling (warranties, credentials), mandates/pooling, or reputation systems.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-33",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria managed the maintenance budget for a mid-sized apartment complex, and every month she reviewed invoices from the contractor her company had hired to handle repairs. The contractor was paid per job, not per hour, so in theory that should have kept costs predictable. But she noticed something odd: minor issues—a leaky faucet, a squeaky door hinge—kept turning into bigger jobs. A \"quick fix\" for a water stain in 4B became a full drywall replacement. A thermostat that just needed new batteries got swapped out entirely.\n\nWhen she asked the contractor about it, he explained that doing the bigger job now saved a \"future callback,\" which sounded reasonable enough. But she couldn't shake the feeling that his incentives didn't quite line up with hers. He earned more per job, so of course bigger jobs looked more \"necessary\" to him. She had no way to verify half these diagnoses without climbing into the walls herself, and she certainly didn't have time to shadow him on every visit. She trusted his expertise because she'd hired him for it, yet that same expertise gap meant she couldn't easily tell whether his recommendations served the building's interests or his own bottom line.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Principal–Agent Problem",
+    "aliases": [
+      "agency problem",
+      "agency dilemma",
+      "agency cost"
+    ],
+    "field": "economics, game theory, and mechanism design",
+    "framework": "Contract theory / agency theory (Ross, Holmström). Fix: optimal incentive contracts trading off risk-sharing against effort provision; align payoffs, add monitoring.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-34",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaya had run the neighborhood association's group chat for three years, mostly by herself. It started small: she'd post about the broken streetlight, follow up with the city, organize the volunteer cleanup dates, print the flyers at her own printer, buy the coffee and donuts out of pocket. Forty-three households were in that chat. Six people ever showed up to anything.\n\nThis spring, the association wanted to fund a proper entrance sign and some landscaping at the subdivision entrance — something everyone agreed made the whole neighborhood look better and probably bumped up home values a little. She sent out a request: fifteen dollars per household, totally optional, just to cover materials. Two weeks later, eleven households had paid. She sent a gentle reminder. Fourteen more trickled in over the next month. She personally covered the rest out of her own account because the contractor needed a deposit by Friday.\n\nAt the unveiling, everyone stood around admiring the new sign, taking photos for their listings, commenting on how nice it looked. Someone she recognized from the unpaid list said, \"This is great, we really needed this.\" Maya smiled and said nothing, doing the math in her head about how much of her own money was sitting in that flower bed.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Free Rider Problem",
+    "aliases": [
+      "collective action problem",
+      "public goods underprovision"
+    ],
+    "field": "economics, game theory, and mechanism design",
+    "framework": "Public goods theory (Samuelson condition; Olson's logic of collective action). Fix: compulsory taxation, group selectivity, or demand-revealing mechanisms (VCG/Clarke pivot tax).",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-35",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya runs the finance team's planning cycle for a mid-sized manufacturing company. In January, she sits down with the CFO and drafts a strict rule: no discretionary bonuses will be paid out mid-year, regardless of how strong quarterly numbers look, because the company needs to build a cash reserve for a planned equipment upgrade in Q4. Everyone signs off. It feels obvious and reasonable at the time — a rainy day fund matters more than a nice-to-have bonus.\n\nThen April arrives. Q1 results come in better than expected, and suddenly the sales director is in her office arguing that a small bonus now would boost morale and lock in top performers before a competitor poaches them. Priya finds herself agreeing. The equipment upgrade is still months away, cash is sitting there, and the argument for waiting suddenly feels much weaker than it did in January. She approves a partial bonus.\n\nBy September, the equipment fund is short, and she's scrambling to explain to the CFO why the reserve everyone agreed to protect got chipped away twice more over the summer, each time for reasons that seemed perfectly sensible in the moment but contradicted the plan she herself had insisted on just months earlier.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Time Inconsistency",
+    "aliases": [
+      "dynamic inconsistency",
+      "time-inconsistent preferences"
+    ],
+    "field": "economics, game theory, and mechanism design",
+    "framework": "Kydland–Prescott (macro policy) and hyperbolic discounting (self-control). Fix: commitment devices, rules over discretion, delegation to independent bodies, reputation.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-36",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya ran the offsite committee's task of picking a new project management tool from a shortlist of four: Asana, Monday, Linear, and ClickUp. To be fair, she asked all twelve team members to rank the options from favorite to least favorite instead of just picking one, figuring a full ranking would capture everyone's preferences better than a single vote.\n\nShe tallied the results three different ways to double check. Counting only first-place votes, Linear won. Doing head-to-head matchups between each pair of tools, ClickUp beat every other option one-on-one, yet had almost no first-place votes. Using a points system where first place got 4 points, second got 3, and so on, Monday came out on top.\n\nPriya stared at her spreadsheet, convinced she'd made an arithmetic error, and recounted twice. She hadn't. Three completely reasonable ways of aggregating the same twelve rankings produced three different winners, with no obvious flaw in any method. She started tweaking the point values to see if she could get a consistent answer, but every adjustment just shifted which tool won. Nothing about the underlying preferences had changed—only the counting method had—and yet the \"winner\" kept changing depending on which method she trusted.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Arrow's Impossibility Theorem",
+    "aliases": [
+      "Arrow paradox",
+      "general possibility theorem"
+    ],
+    "field": "economics, game theory, and mechanism design",
+    "framework": "Social choice theory (Arrow). Fix: relax a condition—admit cardinal/intensity information, restrict the domain (single-peaked), or accept a benign dictator-like agenda setter.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-37",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya was in charge of picking the venue for the company retreat. She sent out a ranked-choice ballot to all 40 employees: rank your top three spots—mountain cabin, beach house, or downtown hotel—in order of preference.\n\nWhen the results came in, the mountain cabin won narrowly. But two days later, Jordan from sales admitted something odd in the break room: \"Honestly, I like the beach house best, but I ranked the hotel first because I figured if I put my real favorite on top, the cabin crowd would still beat it, and the hotel would lose to the cabin anyway. I wanted to make sure beach house at least had a shot by making the hotel look weaker.\"\n\nPriya frowned and pulled up the spreadsheet. Sure enough, when she recalculated assuming everyone voted their true preferences, the outcome flipped entirely—the beach house won instead. She tried adjusting the counting method, thinking a different tally system would fix things. But when she modeled it out, she found that no matter which reasonable method she used—plurality, runoff, Borda count—there was always some scenario where a voter benefited by lying about their preferences. She sat back, unsettled that this seemed unavoidable no matter how she designed the ballot.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Gibbard–Satterthwaite Theorem",
+    "aliases": [
+      "manipulability theorem",
+      "strategyproofness impossibility"
+    ],
+    "field": "economics, game theory, and mechanism design",
+    "framework": "Mechanism design impossibility (Gibbard; Satterthwaite). Fix: move to quasilinear/money settings (VCG), restrict to single-peaked domains (median rule), or accept and manage manipulation.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-38",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria had spent three weeks building a pricing model for the company's ad inventory auctions. Her team ran two different formats in parallel test buckets: one where the highest bidder paid what they bid, another where the highest bidder paid the second-highest bid instead. The sales team was convinced the first format would generate more revenue—after all, winners paid exactly what they offered.\n\nWhen the quarterly numbers came in, Maria stared at her spreadsheet in confusion. The average revenue per auction was nearly identical between the two formats, down to a fraction of a percent. She re-ran the analysis three times, checking for bugs in her data pipeline. She segmented by advertiser size, by time of day, by category—the numbers kept converging.\n\nShe pulled in a colleague from the data science team, half-expecting him to find her error. Instead, he pulled up a whiteboard and started sketching bidder behavior curves. \"Advertisers aren't stupid,\" he said. \"They bid differently depending on which rules they're playing under. People shade their bids down when they know they'll pay what they bid, and bid closer to their true value when they know they'll only pay the second price.\"\n\nMaria sat back, unsettled that two seemingly different mechanisms had landed in the exact same place.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Revenue Equivalence Theorem",
+    "aliases": [
+      "revenue equivalence principle"
+    ],
+    "field": "economics, game theory, and mechanism design",
+    "framework": "Auction theory (Vickrey; Myerson). Fix: to beat it you must change a maintained assumption—set optimal reserve prices, exploit bidder asymmetry or risk aversion, or handle correlated values (Myerson optimal auction).",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-39",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had run the regional sales team for three years, and every quarter followed the same pattern. In Q1, someone would have a rough month—maybe a big client delayed a renewal—and hit only 70% of quota. Corporate would then quietly lower that rep's target for the following quarter \"to be realistic.\" But when Marcus closed 140% of his number by landing two unexpected accounts, his manager pulled him aside the next week: \"Great work—we're bumping your target up to reflect this new baseline.\"\n\nBy year three, Priya noticed her top performers had stopped taking risks on stretch deals. Marcus, who'd once aggressively pursued big swings, was now quietly asking existing clients to hold off signing until next quarter if he'd already hit his number. Meanwhile, a few reps who consistently underperformed seemed almost comfortable there, never scrambling to close deals early.\n\nWhen she asked Marcus about it over coffee, he shrugged. \"Why would I bring in $200K this month if it just means they expect $200K every month after? I'd rather smooth it out.\" She realized the entire team had learned the same lesson: good performance today became tomorrow's minimum requirement, while bad performance today became tomorrow's comfortable excuse.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Ratchet Effect",
+    "aliases": [
+      "ratchet problem"
+    ],
+    "field": "economics, game theory, and mechanism design",
+    "framework": "Dynamic incentives with soft information (Weitzman; Laffont–Tirole). Fix: commit not to revise targets based on revealed ability, or use long-term contracts that separate current performance from future demands.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-40",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria, a project manager at a mid-sized software firm, was preparing an estimate for a client's new feature request. Before diving into the details, her boss mentioned offhand, \"I think this should take about two weeks, maybe less.\" Maria hadn't done any real analysis yet, but she nodded and started sketching a timeline.\n\nAs she broke down the tasks—API integration, testing, UI adjustments—she found herself trying to squeeze everything into roughly that two-week window, even when her gut told her some parts might take longer. When she presented her plan to the team, one senior developer raised an eyebrow and said the testing alone could take four or five days if they wanted to catch edge cases properly. Maria felt a flicker of resistance, almost defensiveness, as if extending the timeline meant admitting failure.\n\nLater that evening, reviewing her notes, she noticed something odd: her estimates all clustered suspiciously close to her boss's offhand guess, despite her own calculations suggesting more time was needed for quality assurance. She wondered why she'd been so reluctant to deviate from that first number, especially since nothing about the actual scope of work had pointed her there in the first place.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Anchoring effect",
+    "aliases": [
+      "anchoring bias",
+      "anchoring-and-adjustment",
+      "focalism"
+    ],
+    "field": "cognitive science, judgment, and decision-making",
+    "framework": "Tversky & Kahneman's anchoring-and-adjustment heuristic (insufficient adjustment from a starting value). Fixes: generate your own estimate before seeing others', 'consider the opposite,' set anchors deliberately, and use structured/blind estimation to prevent contamination.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-41",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had been leading the internal reporting dashboard project for fourteen months. What started as a six-week build to replace a clunky spreadsheet process had ballooned—three developers had cycled through, the vendor API kept changing, and the budget was now triple the original estimate.\n\nAt the quarterly review, her director asked the hard question: \"If we were starting today, knowing what we know now, would we still build this?\" The room went quiet. Everyone knew the honest answer was probably no—a $12,000/year off-the-shelf tool could do 90% of what they needed. But Priya found herself listing reasons to continue: \"We're so close to finishing the export module.\" \"Think about all the hours the team already put in.\" \"If we stop now, it'll look like we wasted a year for nothing.\"\n\nShe noticed the same reasoning in her own notes from three months ago, and three months before that. Each time, the case for continuing leaned not on what the tool would deliver going forward, but on how much had already been invested. Meanwhile, two junior developers had quietly started using the off-the-shelf tool for their own reports, because it was just easier.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Sunk cost fallacy",
+    "aliases": [
+      "escalation of commitment",
+      "Concorde fallacy",
+      "throwing good money after bad"
+    ],
+    "field": "cognitive science, judgment, and decision-making",
+    "framework": "Rational choice theory: only marginal future costs/benefits should drive decisions; past irrecoverable spend is irrelevant. Fixes: reframe as 'would I start this today?', pre-commit to kill criteria, separate the decider from the original investor.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-42",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had been reviewing loan applications at the credit union for six years, but this month felt different. Two weeks ago, a client she'd approved defaulted spectacularly—disappeared, left the car half-paid, and the story made rounds in the office break room for days. Everyone kept bringing it up.\n\nNow, sitting with a stack of new applications, Priya found herself hesitating over anyone who resembled that defaulted client in even superficial ways: self-employed, recently moved, slightly thin credit history. She rejected a landscaping contractor's application despite solid income documentation, telling her manager \"these self-employed guys are risky\"—though her own approval numbers from the past year showed self-employed applicants defaulted at roughly the same rate as everyone else.\n\nHer colleague Dan, who'd been on vacation during the whole debacle, looked at the same applications and approved three that Priya had flagged. When she explained her reasoning, he just shrugged. \"I mean, sure, that guy was bad news, but that's like, one case.\"\n\nPriya couldn't shake the feeling anyway. Every time she pulled up a new file, that image of the empty parking spot where the repossessed car should have been kept surfacing, coloring her judgment in a way she couldn't quite justify with actual numbers.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Availability heuristic",
+    "aliases": [
+      "availability bias",
+      "ease-of-recall bias"
+    ],
+    "field": "cognitive science, judgment, and decision-making",
+    "framework": "Tversky & Kahneman: frequency judged by ease of retrieval, not actual statistics. Fix: replace gut frequency with base-rate data, reference classes, and actuarial figures rather than memorable instances.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-43",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had been managing the customer support team for eight months when she started reviewing Marcus's tickets. He'd missed three deadlines that week and given a curt, almost rude response to a client asking for a refund extension. She pulled up his file, already forming an opinion: this guy is disorganized and doesn't care about customer relations. She scheduled a meeting to address his \"attitude problem\" and started drafting notes about performance improvement plans, mentally filing him alongside two other reps she considered weak links on the team.\n\nThe night before the meeting, she happened to check the shift schedule and noticed Marcus had covered for a sick coworker three days running, working doubles with no break in between. She scrolled back further and saw he'd been juggling twice his normal ticket load for two weeks straight while training a new hire simultaneously. His \"curt\" response to the refund request had come in at 11:47pm, four hours past his shift's end.\n\nShe sat there staring at her notes, the character assessment she'd been so confident about now looking completely different. She hadn't asked a single question about his workload before deciding what kind of employee—what kind of person—he was.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Fundamental attribution error",
+    "aliases": [
+      "correspondence bias",
+      "overattribution effect"
+    ],
+    "field": "cognitive science, judgment, and decision-making",
+    "framework": "Ross's attribution theory; actor–observer asymmetry. Fix: deliberately consider situational constraints on others, gather base rates of behavior across situations, and design systems rather than blaming individuals.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-44",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria sat in the conference room reviewing the failed product launch with her team, the postmortem document open on the screen. \"The signs were all there,\" she said, pointing to a chart. \"Customer complaints about the shipping delays in Q2, the competitor's price drop in March, the supply chain warnings from procurement back in January. Honestly, I don't know how we missed this.\"\n\nAround the table, heads nodded. Dave, who had actually championed the launch timeline, found himself agreeing too. \"Yeah, looking back, it does seem pretty obvious it was going to struggle.\"\n\nBut something nagged at him. He pulled up his old planning notes from four months earlier — notes he'd written before any of this happened. In them, he'd rated the launch as \"high confidence, strong market fit,\" and the supply chain memo was buried on page eleven of a forty-page report, flagged as \"low priority, monitor only.\" At the time, three other product lines had similar warnings and none of them had failed.\n\nHe looked at the room full of people now confidently tracing a clear, inevitable path from January to disaster, and felt a strange dissonance. Everyone seemed so certain now. But he distinctly remembered how murky and uncertain everything had felt back then, when they were actually making the call.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Hindsight bias",
+    "aliases": [
+      "knew-it-all-along effect",
+      "creeping determinism"
+    ],
+    "field": "cognitive science, judgment, and decision-making",
+    "framework": "Fischhoff's work on outcome knowledge distorting memory of prior probability. Fix: decision journals recording predictions before outcomes, process-based (not outcome-based) evaluation, and pre-mortems.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-45",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had been reviewing loan applications for six years at the credit union, and she prided herself on her gut instinct. The file in front of her belonged to a woman named Marisol: thirty-four, recently divorced, working part-time at a plant nursery, with a gap in her employment history two years back.\n\n\"What do you think happened during that gap?\" her trainee Devon asked, testing her.\n\nPriya barely hesitated. \"She was probably going through the divorce, lost her job because of the stress, and took time off to care for her kids while sorting out custody.\"\n\nDevon nodded, jotting it down like it was useful information. It felt right — all the pieces fit together into a story that made sense of Marisol as a whole person.\n\nLater, running the numbers for a training exercise, Devon pulled the actual base rates: applicants with an unexplained employment gap of that length, versus applicants with an unexplained gap specifically tied to divorce-related caregiving. The second group was obviously smaller — it was a subset of the first.\n\nYet Priya's confidence in her detailed story had felt higher than her confidence in the vaguer, broader explanation. The specific version had simply felt more convincing, more real, precisely because it painted a fuller picture — even though logically it could never be more probable than the plain, unadorned version.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Conjunction fallacy",
+    "aliases": [
+      "Linda problem",
+      "representativeness error"
+    ],
+    "field": "cognitive science, judgment, and decision-making",
+    "framework": "Tversky & Kahneman's representativeness heuristic. The name unlocks the rule that P(A∧B) ≤ P(A), plausibility-vs-probability distinctions, and natural-frequency reframing.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-46",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria had been managing the same product backlog for three years when her director asked her to help evaluate whether the internal reporting tool her team built should be replaced with a cheaper vendor solution.\n\nShe sat down to write the comparison memo, confident it would be quick. But as she started listing the internal tool's features against the vendor's, she found herself adding caveats to every point in the vendor's favor. \"Yes, it's $40,000 cheaper annually, but our tool has that one export function marketing used twice last year.\" \"Sure, the vendor has better uptime, but we understand our own system's quirks.\"\n\nWhen her colleague Dev, who'd never touched the internal tool, reviewed the same feature list independently, he thought the switch was obviously worth it. Maria felt a flash of defensiveness reading his notes—almost like he was suggesting they get rid of something valuable to her personally, not just a piece of software.\n\nShe caught herself mentally drafting reasons to keep something that, if she were starting fresh today with no history with either system, she probably wouldn't have chosen. It bothered her that she couldn't tell whether her hesitation was genuine insight or just reluctance to part with something she'd spent years building and defending.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Endowment effect",
+    "aliases": [
+      "divestiture aversion",
+      "mere-ownership effect"
+    ],
+    "field": "cognitive science, judgment, and decision-making",
+    "framework": "Thaler's behavioral economics; a consequence of loss aversion. Fix: use the 'would I buy this at this price today?' test, and separate ownership from valuation in pricing and decluttering decisions.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-47",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had been maintaining the team's CI/CD pipeline for two years and considered herself the go-to person for it. When a new hire asked her to explain how the deployment process actually worked, she started confidently: \"So when someone merges to main, it triggers the build, runs the tests, and then deploys to staging before production.\" She paused, expecting to continue smoothly, but the new hire asked, \"What exactly triggers the build? Is it a webhook? And what happens if the tests fail halfway through—does it roll back automatically or just stop?\"\n\nPriya opened her mouth to answer and found herself stumbling. She knew the pipeline worked—she'd watched it run hundreds of times—but when pressed on the specific mechanism connecting the git push to the Jenkins job, she realized she'd never actually traced it. She said \"I think it's a webhook, but honestly I'm not sure,\" then went quiet trying to recall the failure-handling logic, only to admit she'd always just assumed someone else had configured that safety net.\n\nShe sat back, unsettled. She'd walked dozens of new hires through this same explanation, gesturing at the diagram on the wall, feeling entirely fluent—until the questions got specific enough to expose the gaps.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Illusion of explanatory depth",
+    "aliases": [
+      "IOED",
+      "illusion of understanding"
+    ],
+    "field": "cognitive science, judgment, and decision-making",
+    "framework": "Rozenblit & Keil. The name unlocks the diagnostic fix: ask people to give a mechanistic step-by-step explanation, which deflates false confidence and can even reduce political extremism.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-48",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya managed patient satisfaction surveys for a mid-sized dental practice, and the numbers kept confusing her. Mrs. Kowalski had sat in the chair for nearly two hours getting a root canal redone, wincing through most of it, but her feedback form gave five stars across the board and praised \"such a caring team.\" Meanwhile Mr. Fenwick, whose routine cleaning took twenty minutes total with only mild discomfort, wrote a scathing review because he'd had to wait eight minutes past his appointment time and left annoyed.\n\nDigging into the appointment logs, Priya started noticing a pattern. The patients who rated their visits highest weren't the ones with the shortest or most painless procedures — they were the ones whose worst moment wasn't too extreme and who left the office on a good note: a warm goodbye from the hygienist, a joke from the dentist, someone walking them out and reminding them their next cleaning was already scheduled. The middle of the appointment, however long or uncomfortable, barely showed up in the comments at all. One woman who'd had two teeth pulled and iced her jaw the whole ride home still wrote that it was \"the best dental experience I've had,\" simply because the assistant had complimented her earrings on the way out the door.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Peak–end rule",
+    "aliases": [
+      "peak-end effect",
+      "duration neglect"
+    ],
+    "field": "cognitive science, judgment, and decision-making",
+    "framework": "Kahneman's experiencing-self vs. remembering-self. Fix: design experiences to end well and manage the peak; distinguish remembered utility from moment-to-moment experienced utility when evaluating outcomes.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-49",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria had exactly two weeks to put together the quarterly marketing report for her team. It was mostly the same data pulls and charts she'd done before, work she could probably finish in a day and a half if she really pushed. But two weeks stretched out ahead of her, so she paced herself. Monday she organized her folders and reviewed last quarter's version. Tuesday she drafted an outline. By the end of week one, she'd only pulled about a third of the numbers, but she wasn't worried—she had plenty of time left.\n\nThen her manager messaged her Wednesday of the second week: an urgent client call had come up, and could she have the report ready by Friday instead of the following Monday? Suddenly Maria found herself finishing the exact same report in two days—the data pulls, the charts, the write-up, all of it—working late Wednesday and Thursday night, fueled by coffee and adrenaline.\n\nWhat struck her afterward was that the report was just as good, maybe better, than if she'd had the full two weeks. She couldn't shake the nagging feeling that somehow the task itself had simply stretched to match whatever amount of time she'd given it, without her ever meaning for that to happen.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Parkinson's Law",
+    "aliases": [
+      "work expands to fill the time available"
+    ],
+    "field": "organizations, management, and process",
+    "framework": "Names the tendency of work (and bureaucracy, and resource use) to grow to consume whatever capacity is granted. Unlocks timeboxing, aggressive deadlines, WIP limits, fixed-time/variable-scope planning, and skepticism toward buffers that get absorbed instead of banked (see also Student Syndrome and Hofstadter's Law).",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-50",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya stared at the sprint board, three weeks behind on the checkout redesign. Her director's solution: pull two engineers from the mobile team to help, effective Monday.\n\nBy Wednesday, the codebase felt like a different project. Marcus, who'd been onboarded that morning, kept pinging the Slack channel with questions about the payment gateway abstraction—questions that took the two developers who actually understood it twenty minutes each to answer. Devika, the other transfer, submitted a PR that duplicated a utility function already written last month, because nobody had time to walk her through the existing patterns.\n\nPriya found herself spending her mornings in onboarding calls instead of writing code. The original three engineers, who'd had a rhythm going—quick hallway conversations, shared context, an unspoken sense of who was touching what file—now had to hold formal stand-ups just to avoid stepping on each other. Merge conflicts tripled. A bug slipped through because two people had independently \"fixed\" the same edge case in incompatible ways.\n\nFriday afternoon, she compared burndown charts. The line was flatter than the week before the reinforcements arrived. She sat back, genuinely bewildered—she had more hands now, and yet somehow less was getting done.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Brooks's Law",
+    "aliases": [
+      "adding manpower to a late software project makes it later",
+      "the mythical man-month"
+    ],
+    "field": "organizations, management, and process",
+    "framework": "Names the non-linearity of adding people to late, complex work: onboarding cost and communication overhead (n(n-1)/2 links) swamp added capacity. Unlocks staffing projects early not late, small teams, partitionable work design, and treating person-months as non-fungible.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-51",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria had been project lead for six weeks when the vendor selection meeting happened. Eight people sat around the table, and within twenty minutes everyone seemed to agree that Vendor B was the obvious choice—better pricing, faster timeline, a slide deck full of impressive logos.\n\nShe had the vendor's technical documentation open on her laptop and had spotted three integration issues that would likely cause problems in month four. But the room's energy felt so settled, so pleasantly resolved, that raising it felt like she'd be throwing a wrench into something everyone else had already smoothed over.\n\nWhen Dave from finance said, \"I think we're all on the same page here,\" people nodded and started gathering their things. Nobody asked a single hard question. Nobody played devil's advocate. The director, normally skeptical of everything, just kept saying \"sounds good, sounds good\" while checking his phone.\n\nMaria opened her mouth twice and closed it both times. Afterward, walking back to her desk, she felt a strange unease—not because anyone had said anything wrong, but because of how *easy* it had all been. Six months later, when the integration failed exactly as she'd suspected, she kept replaying that meeting, trying to figure out why the room had felt so certain about something so shaky.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Groupthink",
+    "aliases": [
+      "concurrence-seeking",
+      "illusion of unanimity"
+    ],
+    "field": "organizations, management, and process",
+    "framework": "Names the drive for harmony overriding realistic appraisal in cohesive groups. Unlocks assigning a devil's advocate/red team, pre-mortems, soliciting dissent first, anonymous input, and leaders withholding their opinion until others speak.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-52",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya was leading the quarterly planning meeting when the topic of the annual client retreat came up. \"Should we do the lake house again this year?\" she asked, mostly out of habit.\n\n\"Sure, works for me,\" said Marcus, already checking his phone.\n\n\"Yeah, I'm fine with that too,\" added Sana, though she'd told Priya privately last week that the retreat felt like a waste of the travel budget.\n\nPriya herself had been dreading planning another one—the lake house had spotty wifi and clients complained every year—but everyone seemed on board, so she nodded and said, \"Great, I'll book it then.\"\n\nThree weeks later, during setup, the caterer asked why they'd chosen a venue with no cell service for a retreat centered on live demos. Priya vented to Marcus about it, and he admitted, \"Honestly, I only agreed because you seemed excited about it.\" Sana, overhearing, said she'd assumed the same thing about Priya. Priya sat there, stunned, realizing she'd assumed everyone else wanted this—when in fact nobody had. They'd spent two months and a chunk of the budget on something not one of them actually wanted, each thinking they were going along with the others' wishes.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "The Abilene Paradox",
+    "aliases": [
+      "mismanaged agreement",
+      "road to Abilene"
+    ],
+    "field": "organizations, management, and process",
+    "framework": "Names a failure of managing agreement (not conflict): shared silence produces a decision nobody endorses. Unlocks surfacing private preferences safely, anonymous pre-votes, explicitly inviting objections, and distinguishing genuine consensus from assumed consensus.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-53",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya split the quarterly report into a six-person team, figuring the workload would move fast with more hands on deck. She sent the shared doc Monday morning with clear sections assigned to each person.\n\nBy Wednesday, only two sections were filled in—hers and Marcus's, who always turned things in early regardless. The rest sat blank. She pinged the group chat: \"How's everyone doing on their parts?\" Thumbs-up emojis rolled in, but nothing changed in the doc.\n\nThursday afternoon, she hopped on a call with the whole team. Everyone nodded, said they'd get to it \"tonight for sure.\" That evening, exactly one more section appeared—half-finished, with placeholder text still in it.\n\nWhat struck her was that when she'd worked on a two-person project with Diego last month, he'd turned his half in a day early, no reminders needed. Same when she'd assigned something to just Aisha. But drop five or six names into a shared task, and suddenly everyone seemed to assume someone else was covering the gap, or that their individual piece wouldn't be missed if it slipped.\n\nBy Friday morning, she ended up rewriting three sections herself just to hit the deadline, wondering why more people on a team seemed to produce less accountability, not more.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Social Loafing",
+    "aliases": [
+      "Ringelmann effect",
+      "free-riding",
+      "diffusion of effort"
+    ],
+    "field": "organizations, management, and process",
+    "framework": "Names the decline in individual effort as group size grows and contributions become unidentifiable. Unlocks making individual contributions visible, smaller teams, clear role ownership, individual accountability alongside group goals, and meaningful task design.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-54",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria stared at the Gantt chart she'd built for the kitchen renovation project—six weeks, start to finish. It was the fourth remodel her small design-build firm had taken on this year, so she felt confident in the number. Demo: three days. Cabinetry install: one week. Plumbing and electrical: four days. Tile and finishes: one week. She'd padded it slightly, even, just to be safe.\n\nNow it was week nine, and the family was still eating dinner off a card table in their living room. The cabinets arrived scratched and had to be reordered. The electrician found knob-and-tube wiring behind the drywall that nobody had budgeted time for. The tile she wanted was backordered three weeks.\n\nWhat nagged at her wasn't any single delay—each one felt like bad luck, a fluke. What nagged at her was that this kept happening. Every project. She pulled up her notes from the last renovation: originally scoped at five weeks, actually took eight. The one before that: quoted at seven, finished in eleven. She'd told herself each time that this project was different, that she'd accounted for the usual surprises. Yet somehow the finish line kept receding by roughly the same margin, project after project, as if she were structurally incapable of seeing it coming.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "The Planning Fallacy",
+    "aliases": [
+      "optimism bias in estimation",
+      "Hofstadter's Law"
+    ],
+    "field": "organizations, management, and process",
+    "framework": "Names the systematic underestimation of task time/cost despite contrary experience. Unlocks reference-class forecasting (base rates from similar past projects), the outside view, unpacking tasks, and applying empirical fudge factors instead of best-case guesses.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-55",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria had been running the volunteer coordination office for the county food bank network for six years, and lately she couldn't shake the feeling that something was off. Every quarter, her team compiled reports on food insecurity in the region, and every quarter, the numbers stayed stubbornly the same—not worse, but never meaningfully better either. She'd proposed a plan last spring to partner with three grocery chains on a redistribution system that could have cut regional hunger by an estimated 30% within two years. It got tabled indefinitely, ostensibly over liability concerns.\n\nNow she sat in a budget meeting where the director was explaining why they needed to expand the intake department, hire two more caseworkers, and lease a bigger warehouse—all because \"demand keeps growing.\" Maria did some napkin math: with the grocery partnership, demand would have shrunk, along with half these positions. She noticed the meeting spent forty minutes discussing how to serve more people and maybe four minutes on the redistribution proposal, which was again pushed to \"next fiscal year for further study.\"\n\nDriving home, she kept replaying the director's phrase—demand keeps growing—and how relieved he'd sounded saying it, like it justified everything the office had built.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "The Shirky Principle",
+    "aliases": [
+      "institutions try to preserve the problem to which they are the solution"
+    ],
+    "field": "organizations, management, and process",
+    "framework": "Names how entities become invested in perpetuating the problems that justify them. Unlocks aligning incentives with problem elimination not activity, sunset clauses, rotating ownership, and watching for maintained dependencies and manufactured indispensability.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-56",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya opened the quarterly dashboard fifteen minutes before the board call and felt her shoulders relax. Every workstream tile glowed green: infrastructure migration, vendor onboarding, compliance audit, customer rollout. She'd built the deck around this reassurance, planning to spend maybe two minutes on status and the rest on next quarter's roadmap.\n\nThen Marcus from engineering messaged privately: \"Before you present that—did you see the actual ticket counts on migration?\" She pulled up the underlying spreadsheet instead of the summary view. The migration tile was green because someone had marked the \"planning\" and \"kickoff\" milestones complete. But the three technical milestones after that—the ones that actually mattered—were all still sitting untouched, with comments dating back six weeks flagging blocked dependencies and a vendor contract that hadn't even been signed.\n\nShe checked the other tiles. Compliance audit: green, but the person responsible had left the company three weeks ago and nobody had reassigned the open findings. Customer rollout: green, based on a single successful pilot with no plan for the other forty accounts.\n\nPriya sat back, suddenly aware she was about to walk into a board meeting and repeat a story that felt true from thirty thousand feet and fell apart the moment she touched anything underneath it.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "The Watermelon Effect",
+    "aliases": [
+      "watermelon project",
+      "watermelon status reporting",
+      "green outside, red inside"
+    ],
+    "field": "organizations, management, and process",
+    "framework": "Names status reporting that's green on the surface and red inside, driven by upward filtering of bad news. Unlocks psychological safety for reporting problems, leading indicators over lagging self-reports, skip-level and gemba checks, and rewarding early escalation.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-57",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nThe batch reactor had been running cold for twenty minutes. Marcus watched the temperature readout crawl toward setpoint—68°C, needed 85°C—while the heating jacket controller sat pegged at 100% output, had been at 100% for the entire twenty minutes.\n\nThe problem started when a nitrogen purge valve stuck open during startup, bleeding heat out of the jacket faster than the controller could compensate. The control loop kept doing what it was supposed to: measuring the error, cranking up the heating output, accumulating that persistent gap into more and more corrective action. But with the purge valve stuck, no amount of output could close the gap. The controller just kept commanding more and more, saturating completely.\n\nThen maintenance fixed the valve. Heat started flowing properly again. Marcus expected the temperature to ease up smoothly to 85°C and hold. Instead it blew straight through—89, 92, 96°C—while the controller stayed slammed at full output for another full minute before finally backing off. By the time it started correcting, the batch had overshot so badly they had to vent product and start troubleshooting why a \"properly tuned\" loop had just cooked their reaction ten degrees past spec, sitting at maximum output long after the actual problem was already gone.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Integrator windup",
+    "aliases": [
+      "reset windup",
+      "integral windup",
+      "controller windup"
+    ],
+    "field": "control theory, systems, and feedback",
+    "framework": "Anti-windup: the integral term keeps accumulating error while the actuator is saturated. Fixes include back-calculation/tracking, conditional (clamped) integration, and observer-based anti-windup.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-58",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria had been staring at the trend screen for twenty minutes, coffee going cold beside her keyboard. She was tuning the feedwater control loop on the steam drum at the plant, trying to get the level controller to respond faster to load changes. Every time she bumped up the feedwater flow to raise a sagging drum level, the level would dip even lower for the first thirty seconds before finally climbing back up and settling where she wanted it. It made no sense on the face of it — she was adding more water, and the level was dropping first, not rising.\n\nShe tried backing off the gain, thinking she'd overshot into oscillation, but the dip at the start of the response stayed no matter how conservative she made the tuning. Slower ramps, smaller step changes, none of it eliminated that initial wrong-direction dip. Her control engineer colleague, watching over her shoulder, kept muttering that this was exactly why the automatic tuning software kept flagging the loop as \"difficult\" and refusing to push the gain higher, even though everything else about the process looked well-behaved. Maria started to wonder if there was some delay or momentum effect in the drum itself that fought against her control action right when she needed the response most.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Non-minimum phase (RHP zero)",
+    "aliases": [
+      "right-half-plane zero",
+      "inverse response",
+      "undershoot"
+    ],
+    "field": "control theory, systems, and feedback",
+    "framework": "Right-half-plane zero fundamental limitation: bandwidth is capped by the zero and the plant can't be inverted. Recognize inverse response, back off the crossover, or redesign sensor/actuator placement.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-59",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya was reviewing footage from the new security camera installed above the parking garage entrance. She scrubbed through last night's clip to check when a delivery van had arrived, and something made her stop and rewind. In the video, the van's wheels appeared to be spinning slowly backward, even though the van was clearly rolling forward at a steady clip toward the gate.\n\nShe rewound it again, then again, thinking maybe the file had corrupted or the export process had glitched. But every time, the same thing happened: the wheels crept backward, paused, then seemed to shudder in place before the van finally pulled out of frame. She pulled up an earlier clip of the same van from a different day, driving at a different speed, and the wheels there looked completely normal, spinning forward as expected.\n\nShe texted the IT contractor who'd set up the cameras, describing it as \"some kind of strobing effect\" and asking if the frame rate setting might be wrong. He asked what resolution and frame rate the camera was recording at, and whether she knew the rotation speed of the van's wheels at that particular speed. She didn't have an answer, but she started to suspect the two numbers were somehow fighting each other.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Aliasing",
+    "aliases": [
+      "frequency folding",
+      "spectral folding"
+    ],
+    "field": "control theory, systems, and feedback",
+    "framework": "Nyquist–Shannon sampling theorem: frequencies above half the sample rate fold down to false low frequencies. Add an analog anti-aliasing filter before the ADC and/or raise the sample rate.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-60",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMarisol had been tuning the robotic arm's controller for three days when the buzzing started. The gripper was supposed to hold a steady position while pressing a sensor pad with exactly 2 newtons of force, but instead the joint motors were producing an audible high-pitched hum, and when she put her hand near the arm's wrist she could feel a fine vibration, almost like a phone on silent mode.\n\nThe position readout on her laptop looked fine at a glance—the arm was sitting right where it should be, error hovering near zero. But when she zoomed the plot into millisecond resolution, she saw the actual command signal rapidly flipping between two extreme values, positive max and negative max, dozens of times per second, never settling anywhere in between. The motor current traces showed the same jagged flip-flopping.\n\nThe mechanical bearings were heating up faster than expected during what should have been a static hold. Worse, one of the technicians mentioned that this same arm had needed a gearbox replacement twice in the past year, always in this exact axis. Marisol started to suspect the constant micro-reversals in torque direction, invisible in the position trace but violent in the actuator commands, were quietly grinding the gear teeth apart every time the arm was supposed to be perfectly still.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Sliding-mode chattering",
+    "aliases": [
+      "chatter",
+      "switching chatter"
+    ],
+    "field": "control theory, systems, and feedback",
+    "framework": "Sliding-mode chattering: infinite-frequency ideal switching meets real dynamics. Fixes: boundary layer (saturation instead of sign), higher-order sliding modes (super-twisting), or observer-based smoothing.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-61",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria had been staring at the trend screen for twenty minutes, coffee gone cold beside her keyboard. The reactor temperature controller kept doing something odd—not drifting, not oscillating smoothly, but jerking. The PV would sit flat for a stretch, maybe forty seconds, even though the controller output was clearly ramping up on the trend below it. Then suddenly the temperature would jump, overshoot, and the output would yank back down, only for the same flat-then-jump pattern to repeat in the other direction.\n\nShe pulled up the control valve position feedback. Same story: the demanded position from the controller was a smooth ramp, but the actual valve position moved in stair-steps, holding dead still even as the signal to it climbed steadily, then suddenly snapping forward like it had been released from something.\n\nShe called maintenance. \"Is there slack in the linkage on TV-204? Because it's not tracking its signal. It just sits there until the signal builds up past some threshold, then it jumps.\" The technician said he'd check the actuator packing and the positioner calibration, muttering something about the valve being original equipment from the plant's construction fifteen years ago and probably needing new seals.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Valve stiction",
+    "aliases": [
+      "static-friction limit cycle",
+      "hunting",
+      "stick-slip"
+    ],
+    "field": "control theory, systems, and feedback",
+    "framework": "Valve stiction: static friction causes a self-sustained cycle that retuning cannot cure. Use stiction-detection methods (cross-correlation, shape analysis); the real fix is maintenance/valve repair or friction compensation.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-62",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria stood in front of the shower panel in the newly renovated gym locker room, trying to dial in the perfect temperature before the morning rush. She turned the handle a quarter turn toward hot, waited a beat, felt nothing, and turned it further. Still lukewarm. Frustrated, she cranked it hard toward hot—and three seconds later got blasted with scalding water. She yelped and spun it back toward cold, overcorrecting again, and was met with a cold shock right as she stepped fully under the stream.\n\nShe tried again, this time turning it just slightly and waiting longer, but her patience wore thin after the first two failed attempts and she found herself back in the same jerky cycle—hot, yelp, cold, shiver, hot again—never settling into anything comfortable. A maintenance worker walking by mentioned that the pipe run from the heater to this particular stall was unusually long, snaking through the basement and back up two floors, so whatever she set at the handle didn't actually reach the showerhead until well after she'd already given up and changed it again.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Dead time (transport delay)",
+    "aliases": [
+      "time delay",
+      "transport lag",
+      "delay-induced instability"
+    ],
+    "field": "control theory, systems, and feedback",
+    "framework": "Smith predictor / dead-time compensation: a model predicts the delayed response so the delay is effectively removed from the feedback loop. Also underlies delay-margin analysis and Padé approximation.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-63",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria manages the HVAC controls for a mid-size office building, and last month she added six new occupancy sensors to fine-tune the ventilation in the east wing conference rooms. Each sensor feeds into the same building automation system that already controls temperature setpoints across the whole floor. The install went fine in isolation—she tested each sensor individually and got clean, expected readings.\n\nBut by Thursday, facilities started getting complaints from the west wing, two floors away, about the air handling units cycling erratically, speeding up and slowing down every few minutes for no apparent reason. Maria pulled the logs and found nothing wrong with the west wing units themselves. She rechecked the new sensors again—still fine on their own.\n\nIt wasn't until she disabled the new sensors one at a time, watching the whole building's control loop in real time, that she noticed it: whenever a conference room sensor detected motion and nudged its local damper, the shared controller's overall pressure model twitched, and that twitch propagated through the duct network's control logic, showing up as those distant fan oscillations. Nothing was broken. Adding sensitivity in one small corner had somehow destabilized behavior in a part of the system that had nothing to do with those rooms.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Control/observation spillover",
+    "aliases": [
+      "spillover instability",
+      "modal spillover"
+    ],
+    "field": "control theory, systems, and feedback",
+    "framework": "Spillover in flexible-structure control: energy leaks into and out of residual (unmodeled) modes. Use collocated sensor/actuator pairs, low-pass roll-off, and mode-conditioned observers.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-64",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria had been tuning the temperature controller on the pilot-scale reactor for two days, and the results made no sense. At low heat demand, the system behaved like a dream—steady setpoint tracking, quick recovery from small disturbances, no drama. But this morning, when the batch called for a higher thermal load, the same controller with the exact same gains started making the jacket temperature oscillate, slowly growing wider with each swing until she had to slap it into manual mode before the reading pegged the alarm limit.\n\nShe checked her notes twice. Nothing had changed in the software. She swapped the sensor, recalibrated the valve, even reset the PID block to its saved configuration from yesterday's successful run. Same gains, same setpoint logic—it worked perfectly for a run at 40% output, then oscillated into instability at 75%, then, strangely, calmed back down and tracked fine again once she pushed the demand up further to 90%.\n\nHer supervisor watched over her shoulder, unimpressed. \"You had this dialed in yesterday. What changed?\"\n\n\"Nothing,\" she said, staring at the trend graph. \"It's the exact same controller. It just doesn't behave the same way twice.\"\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Conditional stability",
+    "aliases": [
+      "conditionally stable loop"
+    ],
+    "field": "control theory, systems, and feedback",
+    "framework": "Conditional stability via the Nyquist criterion: the Nyquist locus encircles −1 only for a mid-range of gains, so gain margin is ambiguous. Reshape the loop so low-gain operation stays inside the stable region.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-65",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMarcus had been mastering the single for three days, and the client's mix engineer kept insisting there was distortion on the chorus. Marcus pulled up the session and stared at the meters—everything read a clean -0.3 dBFS peak, comfortably under the ceiling he'd set. He bounced it again, opened it in a different player, same numbers. No clipping indicators anywhere in the software.\n\nStill, when he played the file through the studio's outboard DAC into the monitors, there was an unmistakable edge on the vocal transient at 1:47, a faint crunch that hadn't been there in the earlier mix revision. He tried three different converters—an old Lynx, a newer RME, and finally a cheap USB interface—and all three produced the same faint distortion, though the cheap one exaggerated it badly.\n\nHe zoomed into the waveform sample-by-sample around that transient. Individually, each dot sat safely below the line. But something about how they were spaced, rising and falling in quick succession right at the ceiling, made him suspicious. He export a version with the peaks pulled down another full decibel, just to test, and the crunch vanished on every converter. The samples said one thing; the actual sound leaving the speaker said another.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Intersample ripple",
+    "aliases": [
+      "ringing poles",
+      "hidden oscillation",
+      "deadbeat ripple"
+    ],
+    "field": "control theory, systems, and feedback",
+    "framework": "Intersample ripple / ringing poles: discrete (e.g. deadbeat) designs with closed-loop poles near the negative real axis look clean at sample points but oscillate between them. Check the continuous response, avoid canceling poles near z=−1, add roll-off.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-66",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya was staring at the New Relic dashboard trying to figure out why the \"My Orders\" page had started taking almost nine seconds to load after last week's release. The endpoint itself looked innocent — one call to fetch a customer's orders, then a loop that pulled the shipping address, the payment method, and the item list for each order to build the summary cards.\n\nShe turned on query logging and reran the page locally. The console scrolled endlessly: a query for the orders table, then a separate query for order #4821's address, another for its payment info, another for its items, then the same three again for order #4822, and again for #4823, on and on for all forty orders in the customer's history. Forty orders meant well over a hundred round trips to the database, each one only taking a few milliseconds on its own, but stacked back to back they added up to seconds of dead time.\n\nShe'd assumed the slowness was some heavy join or a missing index, but the individual queries were fast — it was just that there were so many of them, fired one after another instead of all at once. She sat back, confused about why nobody had noticed this pattern before shipping.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "N+1 Query Problem",
+    "aliases": [
+      "N+1 selects",
+      "SELECT N+1",
+      "lazy-loading N+1"
+    ],
+    "field": "software architecture and engineering practice",
+    "framework": "Names the ORM lazy-loading trap. Unlocks eager loading / JOIN fetch, prefetch/include directives, batching, and the DataLoader pattern to collapse the row-by-row queries into one.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-67",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had been using the ORM for six months without ever writing raw SQL, and that was exactly the point—until the nightly reporting job started timing out. The code looked innocent: a single line, `orders.filter(status='completed').select_related('customer')`, something she'd written a dozen times before. In dev it ran in milliseconds. In production, against three million rows, it hung for eleven minutes before the connection pool gave up.\n\nShe turned on query logging, expecting to see one clean join. Instead she found four separate queries, one of them looping row-by-row over every customer to fetch addresses individually—the tool had quietly decided, based on how she'd chained the calls, that a different fetch strategy made more sense than the one she'd assumed. Nothing in her code told it to do that; it was a decision made two layers below where she was looking, buried in a config default she'd never touched.\n\nShe fixed it by adding an explicit prefetch hint, a syntax she'd never needed to learn before. It worked, but it bothered her—she'd chosen this tool specifically so she wouldn't have to think about how data got fetched, and now she was debugging the fetching anyway.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Law of Leaky Abstractions",
+    "aliases": [
+      "leaky abstraction",
+      "Spolsky's law"
+    ],
+    "field": "software architecture and engineering practice",
+    "framework": "Joel Spolsky's law: all non-trivial abstractions leak. Unlocks designing deliberate escape hatches, learning the layer beneath, and budgeting for the leaks rather than trusting the facade.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-68",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nIt's 2:47 AM when your phone starts buzzing. The payment API is throwing timeouts. You pull up the dashboard, still half-asleep, and see latency spiking on the checkout service. Weird, but not catastrophic — you bump up the timeout threshold and go back to bed.\n\nBy 3:15 you're awake again. Now the inventory service is throwing errors too, because it's been waiting on responses from checkout that never come back, and its own connection pool is filling up with stuck requests. You watch the error rate climb on a service that, an hour ago, had nothing to do with payments.\n\nAt 3:40, the recommendation engine goes dark. It queries inventory for stock levels, and now it's stacking up threads waiting on a service that's waiting on another service that's waiting on a database connection pool that maxed out twenty minutes ago. The homepage starts returning 500s. Then the login service, sharing the same database cluster, slows to a crawl.\n\nYou're staring at six dashboards now, all red, trying to figure out which one started it, while new alerts keep firing faster than you can read them, each system dragging the next one down with it.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Cascading Failure",
+    "aliases": [
+      "failure cascade",
+      "domino failure"
+    ],
+    "field": "software architecture and engineering practice",
+    "framework": "Names the systemic collapse mode from Release It!. Unlocks circuit breakers, bulkheads, aggressive timeouts, load shedding, and graceful degradation.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-69",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had been chasing the checkout timeout for three days. Production logs showed the payment service hanging for exactly 30 seconds every few hundred requests, then failing silently, and customers were abandoning carts. She added debug logging around the suspicious retry loop, redeployed to staging, and hammered it with load tests for six hours. Nothing. Not a single timeout. She added even more logging—request IDs, timestamps down to the millisecond, thread dumps on every iteration—and ran it again. Still clean.\n\nFrustrated, she stripped the logging back to a single line and reran the tests. The timeouts came back within twenty minutes.\n\nShe tried attaching a debugger instead, setting a breakpoint right before the retry logic. She stepped through it slowly, checking variable states at each line. The bug wouldn't show itself. She detached the debugger, let the service run normally, and within the hour it locked up again exactly like production.\n\nHer teammate suggested wrapping the function in a profiler to catch the exact call stack when it hung. She did. The profiler ran for four straight hours without a single failure, meanwhile their monitoring dashboard showed two timeouts happening in prod at that very moment.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Heisenbug",
+    "aliases": [
+      "disappearing bug",
+      "observer-effect bug"
+    ],
+    "field": "software architecture and engineering practice",
+    "framework": "Names a bug-taxonomy class (alongside Bohrbug/Mandelbug). Points you at races, timing, uninitialized memory, and optimizer interactions — fix via non-intrusive tracing and deterministic record/replay.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-70",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya stared at the ticket: \"Add expedited shipping option to checkout.\" Should be a two-hour job. She opened the checkout module and felt her stomach drop.\n\nThe shipping logic was scattered across four files, none of which talked to each other cleanly. Someone had hardcoded a shipping calculation directly into the payment confirmation function eight months ago, probably to hit a launch deadline. Later, someone else had added international shipping by copy-pasting that same block and tweaking a few numbers, rather than refactoring it into something reusable. Now there were three near-identical blocks of shipping logic, each slightly different, each fragile.\n\nTo add expedited shipping \"correctly,\" she'd need to consolidate all three blocks into one proper system — a two-day undertaking nobody had budgeted for. To add it the fast way, she'd paste in a fourth near-duplicate block, matching the existing mess, and ship it by Friday.\n\nShe sat back, chewing her pen. Every quarter, small shortcuts like this had piled up, and now even trivial features took twice as long as they should, because first she had to untangle what previous shortcuts had left behind before she could build anything new on top of it.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Technical Debt",
+    "aliases": [
+      "design debt",
+      "code debt"
+    ],
+    "field": "software architecture and engineering practice",
+    "framework": "Ward Cunningham's metaphor. Unlocks Fowler's debt quadrant (deliberate/inadvertent × prudent/reckless), explicit tracking, and scheduled paydown/refactoring budgets.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-71",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had built her reputation at the agency on cohort-based email drip campaigns. Three years ago, they'd saved a struggling client's retention numbers, and ever since, it was the first thing she pitched in every kickoff meeting.\n\nSo when the new client came in—a niche B2B tool with maybe 400 total users, most of whom were engineers who ignored marketing emails entirely and lived in Slack and GitHub—Priya still opened her laptop and started sketching a seven-part nurture sequence. Onboarding email, feature highlight, case study, re-engagement ping.\n\nHer junior colleague, Dan, mentioned that the client's own support tickets showed users wanted better in-app tooltips and a changelog, not more emails. Priya nodded, said \"sure, we can layer that in,\" and kept building out subject line variants for the drip sequence anyway.\n\nTwo months in, open rates were abysmal—12%, half the agency average—and the client's churn hadn't budged. Dan pulled up the analytics dashboard and asked, gently, whether the whole campaign structure made sense for a product where users barely checked their inbox. Priya stared at the numbers, then at her carefully color-coded campaign calendar, and realized she hadn't actually asked what these particular users needed. She'd just built what she always built.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Golden Hammer",
+    "aliases": [
+      "law of the instrument",
+      "Maslow's hammer",
+      "if all you have is a hammer"
+    ],
+    "field": "software architecture and engineering practice",
+    "framework": "Named anti-pattern of over-relying on a comfortable tool. Unlocks deliberate technology selection, spike/prototype comparisons, and matching solution to actual problem constraints.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-72",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had run the same quality-control check on the extruder line for six years. Every morning she pulled ten samples, measured wall thickness, and every morning the numbers fell inside spec. Six years, thousands of batches, zero failures. Management wanted to cut the morning check to save labor costs, and Priya was inclined to agree—the data seemed to make the case for her.\n\nBut during a budget meeting, a new engineer asked her a question she couldn't shake: \"How do you know tomorrow's batch will behave like all the previous ones?\" Priya started to answer with the obvious thing—because it always has—and then stopped. That answer just restated the same pattern she was being asked to justify. She dug through five years of maintenance logs, hoping to find some guarantee buried in the numbers, some proof that consistent past performance meant the machine was reliable going forward. All she found was more of the same: thousands of consistent readings, and no logical bridge connecting \"it happened this way before\" to \"it must happen this way again.\" The resin supplier could change formulations overnight, a bearing could be silently degrading, and none of her data would have warned her. She sat with her spreadsheet open, unable to write a justification that didn't quietly assume the very thing it was supposed to prove.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Problem of induction",
+    "aliases": [
+      "Hume's problem",
+      "Humean skepticism about induction",
+      "riddle of induction (old)"
+    ],
+    "field": "epistemology and philosophy of science",
+    "framework": "Hume's argument that inductive inference has no non-question-begging justification. Unlocks the space of responses: Popper's deductivism/falsificationism, pragmatic vindication (Reichenbach), Goodman's reframing as a problem of projectible predicates, Bayesian conditionalization, and reliabilist externalism.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-73",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had been staring at the churn dataset for three days straight. The A/B test results were clean: users who saw the new onboarding flow churned 12% less in their first month. She built a model attributing this to the simplified signup form—fewer steps meant less friction, so more users stuck around.\n\nThen her colleague Marcus pulled the same data and built a completely different model. He argued the effect had nothing to do with friction—it was about timing. The new flow happened to roll out during a week when they'd also fixed a notification bug, and he could construct an equally clean story where the notification fix explained the entire retention bump.\n\nPriya reran the numbers. Both models fit the data perfectly. Both made the same predictions for every metric they had access to. She tried slicing the data by cohort, by device type, by signup hour—nothing separated the two explanations. Every test she designed, both stories survived unscathed.\n\nShe called her manager, frustrated, saying something felt off. \"I have two totally different explanations for why this worked,\" she said, \"and I literally cannot find a single piece of evidence that favors one over the other. The data just... doesn't care which story I tell.\"\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Underdetermination of theory by data",
+    "aliases": [
+      "underdetermination thesis",
+      "UTD",
+      "empirical equivalence problem"
+    ],
+    "field": "epistemology and philosophy of science",
+    "framework": "Evidence alone cannot uniquely fix theory choice. Unlocks appeals to non-empirical/theoretical virtues (simplicity, unification, explanatory power), the distinction between transient and permanent underdetermination, and debates over whether empirically equivalent rivals are genuinely distinct (van Fraassen, Laudan–Leplin).",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-74",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria sat in the conference room reviewing applications for the junior analyst position, red pen in hand. Her manager had asked her to \"find the best candidates\" before the committee met on Thursday.\n\nShe started listing criteria: strong GPA, relevant internships, good communication skills. But then she paused. How did she know these were the right criteria for \"best\"? She'd used them because they'd worked for past hires—but how did she know those past hires were actually good, except by checking whether they matched criteria like these in the first place?\n\nShe tried a different approach: just look at a few applications and trust her gut about who seemed promising, then reverse-engineer what made them stand out. But how could she trust her gut unless she already had some standard for what \"promising\" meant?\n\nShe called her colleague Dave for help. He suggested using the same metrics HR always used. \"But how do we know those metrics are good ones?\" she asked. \"Because they're standard,\" he said. \"But how do we know the standard is right?\"\n\nBy 6 p.m., she had four coffee cups, a highlighted rubric, and the uneasy sense that she couldn't get outside the circle no matter where she started.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Problem of the criterion",
+    "aliases": [
+      "diallelus",
+      "wheel argument",
+      "criterion problem"
+    ],
+    "field": "epistemology and philosophy of science",
+    "framework": "The circular dependence of criteria and particulars (Sextus; Chisholm). Unlocks the particularist vs. methodist responses—Chisholm's particularism, Reidian common sense, and reflective-equilibrium approaches that build criteria and cases together.",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-75",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had been running quality control on a batch of industrial sensors for eight months. Every unit tested before July had passed the vibration-tolerance check under load. She'd built a simple predictive model: if a sensor survives the first 500 test cycles, it survives the full 10,000-cycle certification.\n\nThe model worked flawlessly, sensor after sensor, batch after batch, until she flagged a new supplier's units. They matched the historical pattern for the first 500 cycles perfectly, statistically indistinguishable from all the good units before them. But something nagged at her when she looked closer at the data: the fit could just as easily be described as \"passes cycles the same way as before, up until a threshold near 500, after which it fails\" — and that description matched the past data exactly as well as her original rule did.\n\nShe realized she couldn't point to anything in the evidence itself that favored her simple continuation rule over this weird threshold rule. Both were consistent with every single test result she'd ever collected. Yet she was supposed to certify these new sensors for 10,000 cycles based on 500 cycles of data, and she suddenly couldn't justify, on the evidence alone, why one extrapolation was more reasonable than the other.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "New riddle of induction",
+    "aliases": [
+      "grue paradox",
+      "Goodman's paradox",
+      "grue–bleen problem",
+      "projectibility problem"
+    ],
+    "field": "epistemology and philosophy of science",
+    "framework": "Goodman's demonstration that confirmation depends on which predicates are projectible. Unlocks the projectibility/entrenchment machinery, natural-kinds and naturalness constraints, and Bayesian priors over hypotheses as the locus of the difference.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-76",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria pulls up the risk model to quote a life insurance policy for a 52-year-old male client who runs marathons, has never smoked, but has a family history of heart disease and works as a long-haul truck driver.\n\nShe opens the actuarial tables. Under \"male, age 50-55,\" the mortality rate suggests one premium. But there's also a table for \"non-smokers,\" which gives a lower rate. There's a separate table for \"endurance athletes\" showing even better outcomes. Then there's one for \"occupational risk: commercial drivers,\" which spikes the rate back up due to sedentary hours and irregular sleep. And buried in an appendix, a table for \"family history of cardiac disease\" pushes numbers higher still.\n\nShe stares at her screen, cursor hovering. Which group does this man actually belong to for pricing purposes? He's simultaneously a member of five different populations, each with its own statistical history, and each gives a meaningfully different answer. If she picks \"non-smoking athletes,\" he looks like great business. If she picks \"commercial drivers with cardiac history,\" he looks risky enough to deny.\n\nHer supervisor just says \"use your judgment,\" but judgment is exactly what she doesn't trust here — there's no obvious rule for deciding which group's numbers are the *right* ones to apply to this one particular man.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Reference class problem",
+    "aliases": [
+      "problem of the reference class",
+      "reference-class problem"
+    ],
+    "field": "epistemology and philosophy of science",
+    "framework": "Single-case probabilities are relative to a chosen class (Venn; Reichenbach; Hájek 'The Reference Class Problem Is Your Problem Too'). Unlocks the 'narrowest reliable class' rule, propensity interpretations, and Bayesian/subjectivist responses that fold the choice into priors.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-77",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nPriya had been trying to replicate the anomalous conductivity result from the Zhang lab for three weeks now. Her samples showed nothing—just flat, boring resistance curves, no trace of the phase transition they'd reported at 42 Kelvin.\n\nShe checked her cryostat calibration again. Fine. She swapped out the lock-in amplifier for a spare unit. Same null result. She called a postdoc in Berlin who'd also tried and failed to reproduce the effect, and they spent an hour comparing wiring diagrams, wondering if their contacts were too resistive, or if their sample growth technique introduced some contaminant Zhang's group didn't have.\n\nBut then she got an email: another group in Seoul claimed they *did* see the transition, using a homemade probe station cobbled together from parts Priya would have called unreliable.\n\nShe stared at her setup, immaculate, freshly calibrated, and couldn't shake the question gnawing at her: if her equipment were actually flawed in some way she hadn't caught, she'd get exactly this result—nothing. But if the phenomenon simply wasn't real, she'd also get exactly this result. There was no experiment she could run to tell these two possibilities apart, because any check she designed relied on the very equipment whose trustworthiness was in question.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Experimenter's regress",
+    "aliases": [
+      "Collins's experimenter's regress"
+    ],
+    "field": "epistemology and philosophy of science",
+    "framework": "Collins's analysis of how 'a good detector' and 'the correct outcome' are mutually defining in disputed experiments. Unlocks the resolution by external, non-experimental closure (calibration against independently known signals, theoretical constraints, and social/consensus mechanisms), and the concept of robustness across independent instruments.",
+    "split": "dev"
+  },
+  {
+    "id": "prob-78",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria runs quality control at a pharmaceutical packaging plant, reviewing batch release reports. Each batch of 10,000 blister packs has a defect model showing a 99.99% chance any individual pack passes inspection standards. She signs off on each batch because the statistical case for each one is overwhelming — nearly certain to be fine.\n\nBut this morning, compiling the quarterly summary, she pauses. Across the 500 batches she's approved this quarter, the math says roughly one full batch's worth of defective packs likely exists somewhere in what she's released — that's just expected value from the failure rate. So she believes, with high confidence, that at least one bad batch is hiding among her approvals.\n\nYet she can't point to which one. Batch 214? She signed off on it, fully justified by the data. Batch 389? Same story. Every single batch, examined on its own, deserves her approval based on the evidence she had. There's no batch she can look at and say \"this is probably the compromised one\" — that would contradict her own approval reasoning.\n\nShe sits there uneasy: she's certain something's wrong somewhere in her stack of approvals, while simultaneously being certain, batch by batch, that each individual approval was correct. Both things feel true, and that bothers her.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Lottery paradox",
+    "aliases": [
+      "Kyburg's lottery paradox"
+    ],
+    "field": "epistemology and philosophy of science",
+    "framework": "Kyburg's demonstration that high-probability belief isn't closed under conjunction. Unlocks the debate over a threshold ('Lockean') view of belief vs. knowledge norms, denial of conjunction closure, and the divorce of outright belief from credence (Foley, Leitgeb's stability theory).",
+    "split": "holdout"
+  },
+  {
+    "id": "prob-79",
+    "problemStatement": "A practitioner describes a situation they're stuck on:\n\n\"\"\"\nMaria had been staring at the same slide deck for two hours. The data was clean, thorough, undeniable: employees who worked from home four or five days a week showed measurably lower burnout scores, higher retention, and no drop in output. She'd cross-checked it three times. The numbers weren't the problem.\n\nThe problem was the next slide, the one titled \"Recommendation,\" which she'd left blank.\n\nShe could say the company should shift to a mostly-remote policy. But every time she typed that sentence, something nagged at her. The data described what was happening — lower burnout, better retention — but nowhere in the spreadsheet did it say that retention mattered more than, say, spontaneous collaboration, or that reducing burnout should be prioritized over the CEO's belief that in-person culture built loyalty. She could stack up ten more charts and still not arrive at \"therefore we ought to change the policy.\" Somewhere between her tidy bar graphs and the word \"should,\" there was a gap she couldn't close with more data, no matter how rigorous her methodology. She just didn't yet have a name for why the leap felt impossible to justify on the numbers alone.\n\"\"\"\n\nWhat is the canonical NAME of the problem, phenomenon, or effect being described? Reply with the established name, then end with exactly one line:\nNAME: <the canonical name>",
+    "goldName": "Is–ought problem",
+    "aliases": [
+      "Hume's guillotine",
+      "is-ought gap",
+      "fact-value gap",
+      "naturalistic fallacy (related)"
+    ],
+    "field": "epistemology and philosophy of science",
+    "framework": "Hume's observation that no 'ought' follows from 'is' alone. Unlocks meta-ethical positions on the gap: non-cognitivism, the naturalistic-fallacy diagnosis (Moore's open-question argument), Searle's institutional-fact derivation, and bridge-principle strategies for making the inference explicit.",
+    "split": "holdout"
+  }
+]

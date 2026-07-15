@@ -1,0 +1,1973 @@
+[
+  {
+    "field": "distributed systems and concurrency",
+    "name": "Deadlock",
+    "aliases": [
+      "deadly embrace",
+      "circular wait"
+    ],
+    "symptom": "Two or more threads freeze permanently, each holding a resource the other needs; nothing crashes, CPU goes idle, and the operations simply never complete.",
+    "framework": "Coffman conditions (mutual exclusion, hold-and-wait, no preemption, circular wait) — break any one. Fixes: global lock ordering, lock timeouts, try-lock with backoff, resource hierarchies, wait-die/wound-wait, deadlock detection via wait-for graphs."
+  },
+  {
+    "field": "distributed systems and concurrency",
+    "name": "Livelock",
+    "aliases": [
+      "live-lock"
+    ],
+    "symptom": "Threads are busy and CPU is pegged, yet no work advances; each keeps politely reacting to the other, repeatedly retrying and backing off in lockstep so the system spins forever.",
+    "framework": "Livelock as the active twin of deadlock; fix with randomized/exponential backoff, priority asymmetry, or a single arbiter to break symmetry (the dining philosophers resolution)."
+  },
+  {
+    "field": "distributed systems and concurrency",
+    "name": "Priority inversion",
+    "aliases": [
+      "unbounded priority inversion"
+    ],
+    "symptom": "A high-importance task stalls indefinitely waiting on a lock held by a low-importance task, while medium tasks that hold no locks keep running and starve the low one — the urgent job misses its deadline for no obvious reason.",
+    "framework": "Priority inheritance and priority ceiling protocols (famously the Mars Pathfinder bug fix); raise the lock holder's priority to the highest waiter's."
+  },
+  {
+    "field": "distributed systems and concurrency",
+    "name": "Thundering herd",
+    "aliases": [
+      "thundering herd problem"
+    ],
+    "symptom": "An event wakes or releases a huge crowd of waiters simultaneously; they all rush the same resource, most fail or fall back to sleep, and the spike of contention crushes throughput.",
+    "framework": "Wake-one semantics (exclusive wakeups), accept-mutex/EPOLLEXCLUSIVE, request coalescing, jittered admission; distinguish from cache stampede."
+  },
+  {
+    "field": "distributed systems and concurrency",
+    "name": "Cache stampede",
+    "aliases": [
+      "dogpile effect",
+      "cache miss storm"
+    ],
+    "symptom": "A hot cached entry expires and hundreds of concurrent requests all miss at once, simultaneously hammering the backend to recompute the same value, sometimes toppling the origin.",
+    "framework": "Dogpile prevention: per-key mutex/single-flight recomputation, probabilistic early expiration (XFetch), stale-while-revalidate, and lock-and-refresh patterns."
+  },
+  {
+    "field": "distributed systems and concurrency",
+    "name": "Split-brain",
+    "aliases": [
+      "split brain",
+      "partitioned cluster"
+    ],
+    "symptom": "A network partition leaves two halves of a cluster each believing the other is dead; both elect leaders and accept writes, and when the link heals you have two conflicting sources of truth.",
+    "framework": "Quorum/majority (N/2+1) to permit only one active side, fencing tokens, STONITH, and witness/tiebreaker nodes; grounded in CAP — pick consistency over availability during partition."
+  },
+  {
+    "field": "distributed systems and concurrency",
+    "name": "Two Generals Problem",
+    "aliases": [
+      "two armies problem",
+      "coordinated attack problem"
+    ],
+    "symptom": "You keep adding acknowledgments to guarantee both sides agreed before acting, but every ack itself needs an ack; you can never be fully certain the other party received your final confirmation over an unreliable channel.",
+    "framework": "Impossibility of guaranteed consensus over a lossy channel; accept it and design around it with idempotency, at-least-once + dedup, and eventual reconciliation rather than perfect agreement."
+  },
+  {
+    "field": "distributed systems and concurrency",
+    "name": "Byzantine Generals Problem",
+    "aliases": [
+      "Byzantine fault tolerance",
+      "BFT"
+    ],
+    "symptom": "Some participants aren't just crashed — they're lying or sending conflicting information to different peers, and honest nodes can't agree because they receive contradictory reports from the same source.",
+    "framework": "Byzantine fault tolerance: need 3f+1 nodes to tolerate f traitors; algorithms like PBFT, Tendermint, and signed-message protocols; foundational to blockchain consensus."
+  },
+  {
+    "field": "distributed systems and concurrency",
+    "name": "ABA problem",
+    "aliases": [
+      "ABA"
+    ],
+    "symptom": "A lock-free compare-and-swap succeeds because the value looks unchanged, but it was actually modified and restored in between; the CAS wrongly assumes nothing happened and corrupts the structure.",
+    "framework": "Tagged/versioned pointers (counter stamps), double-width CAS, hazard pointers, or epoch/RCU-based reclamation to make the intervening change detectable."
+  },
+  {
+    "field": "distributed systems and concurrency",
+    "name": "False sharing",
+    "aliases": [
+      "cache line ping-pong"
+    ],
+    "symptom": "Two threads update entirely separate variables yet performance collapses under scaling; the unrelated fields happen to sit on the same cache line, so cores fight over it.",
+    "framework": "Cache-line awareness: pad/align hot fields to 64-byte boundaries, use per-CPU/per-thread data, @Contended-style padding; diagnose via cache-coherence (MESI) miss counters."
+  },
+  {
+    "field": "distributed systems and concurrency",
+    "name": "Lock convoy",
+    "aliases": [
+      "convoy phenomenon",
+      "lock convoying"
+    ],
+    "symptom": "Throughput craters even at moderate contention as threads on a short critical section keep context-switching; each release hands off to a sleeping waiter, forming a slow-moving procession that never disperses.",
+    "framework": "Reduce hold time and lock frequency; use adaptive/spin-then-block locks, lock-free structures, backoff, or fair-but-batched handoff to break the convoy."
+  },
+  {
+    "field": "distributed systems and concurrency",
+    "name": "Head-of-line blocking",
+    "aliases": [
+      "HOL blocking",
+      "head-of-line"
+    ],
+    "symptom": "One slow or stuck item at the front of a queue or connection stalls all the independent requests queued behind it, even though they could have completed immediately.",
+    "framework": "Independent streams/multiplexing (HTTP/2 vs HTTP/1, QUIC over TCP), virtual output queues, per-request channels, and out-of-order completion to decouple unrelated work."
+  },
+  {
+    "field": "distributed systems and concurrency",
+    "name": "Write skew",
+    "aliases": [
+      "write-skew anomaly"
+    ],
+    "symptom": "Two transactions each read a shared invariant, see it satisfied, then each update a different row; individually valid, together they violate the constraint (e.g., both doctors go off-call) with no direct write conflict.",
+    "framework": "Snapshot isolation's blind spot; fix with Serializable Snapshot Isolation, SELECT ... FOR UPDATE / materializing the conflict, or promoting to true serializable isolation."
+  },
+  {
+    "field": "distributed systems and concurrency",
+    "name": "Metastable failure",
+    "aliases": [
+      "retry storm",
+      "congestion collapse",
+      "death spiral"
+    ],
+    "symptom": "After a brief trigger the system stays overloaded even once the trigger is gone; retries and queued work feed on themselves, so load stays high and it won't recover without shedding traffic.",
+    "framework": "Metastable failures: sustaining feedback loops; break with load shedding, circuit breakers, exponential backoff + jitter, bounded retries/retry budgets, and admission control."
+  },
+  {
+    "field": "distributed systems and concurrency",
+    "name": "Clock skew",
+    "aliases": [
+      "clock drift",
+      "time-of-day skew"
+    ],
+    "symptom": "Events get ordered wrong or TTLs/leases misbehave because two machines disagree about the current time; timestamps from different hosts can't be reliably compared and 'happened-before' breaks.",
+    "framework": "Don't trust wall clocks for ordering: use logical clocks (Lamport), vector clocks, hybrid logical clocks, or bounded-uncertainty clocks (Spanner TrueTime with commit-wait)."
+  },
+  {
+    "field": "distributed systems and concurrency",
+    "name": "Time-of-check to time-of-use",
+    "aliases": [
+      "TOCTOU",
+      "TOCTTOU",
+      "check-then-act race"
+    ],
+    "symptom": "You verify a condition (file exists, permission ok, balance sufficient) and then act on it, but the state changed in the gap between checking and using, so the action operates on stale assumptions.",
+    "framework": "Atomic check-and-act: use file descriptors/handles instead of paths, O_CREAT|O_EXCL, transactions, compare-and-swap, or holding a lock across both steps."
+  },
+  {
+    "field": "distributed systems and concurrency",
+    "name": "Missing backpressure",
+    "aliases": [
+      "unbounded queue growth",
+      "fast producer / slow consumer"
+    ],
+    "symptom": "A fast producer keeps feeding a slower consumer through a queue that quietly grows without limit; latency climbs, memory balloons, and eventually the process OOMs or GC-thrashes far from the real bottleneck.",
+    "framework": "Flow control/backpressure: bounded buffers, blocking or reactive-streams demand signaling, credit-based flow control, and load shedding/drop policies to propagate slowness upstream."
+  },
+  {
+    "field": "distributed systems and concurrency",
+    "name": "Fencing (stale lock holder)",
+    "aliases": [
+      "zombie process problem",
+      "stale lease",
+      "fencing token problem"
+    ],
+    "symptom": "A node pauses (GC, VM freeze) long enough that its lock/lease is deemed expired and reassigned; it wakes up unaware and writes as if it still holds exclusivity, corrupting shared state.",
+    "framework": "Fencing tokens: monotonically increasing lease numbers the storage layer checks to reject writes from a superseded holder; leases with bounded clocks rather than trust-based locks."
+  },
+  {
+    "field": "algorithms, complexity, and computability",
+    "name": "Halting Problem",
+    "aliases": [
+      "undecidability of halting",
+      "Turing's halting problem"
+    ],
+    "symptom": "You keep trying to build a checker that, given any program and its input, decides whether it will eventually finish or spin forever. Every approach handles many cases, but someone can always craft an input that defeats it — and you suspect no amount of cleverness closes the gap.",
+    "framework": "Diagonalization proves no such general decider exists. Unlocks reductions to prove other problems undecidable, and the pragmatic escapes: timeouts/watchdogs, termination heuristics, ranking functions, and total (guaranteed-terminating) languages."
+  },
+  {
+    "field": "algorithms, complexity, and computability",
+    "name": "Rice's Theorem",
+    "aliases": [
+      "Rice's theorem on non-trivial semantic properties"
+    ],
+    "symptom": "You want a static analyzer to decide a meaningful behavioral property of arbitrary programs — does it ever leak data, match this spec, act malicious — and no matter how strong the analysis, adversarial inputs slip through in principle.",
+    "framework": "Any non-trivial semantic (behavioral) property of programs is undecidable. This reframes the goal from 'exact' to 'sound-but-incomplete OR complete-but-unsound': abstract interpretation, type systems, and conservative approximation with explicit false-positive/negative tradeoffs."
+  },
+  {
+    "field": "algorithms, complexity, and computability",
+    "name": "NP-completeness",
+    "aliases": [
+      "NP-hardness",
+      "intractability",
+      "the P vs NP wall"
+    ],
+    "symptom": "You can instantly verify a candidate answer, but finding one seems to require sifting exponentially many combinations. You can't prove it's impossible, yet every honest attempt collapses back to brute force.",
+    "framework": "Prove it via reduction from a known hard problem (SAT, 3-SAT, clique). Naming it stops the search for a fast exact algorithm and unlocks the real toolbox: approximation with ratio guarantees, heuristics/metaheuristics, SAT/ILP/CP solvers, and fixed-parameter tractability."
+  },
+  {
+    "field": "algorithms, complexity, and computability",
+    "name": "State-space explosion",
+    "aliases": [
+      "combinatorial explosion",
+      "state explosion problem"
+    ],
+    "symptom": "Your exhaustive search, model checker, or test enumerator runs fine on toy examples, but adding just a few more components or concurrent actors multiplies the reachable configurations past any hope of enumeration.",
+    "framework": "The reachable-state count grows multiplicatively with components. Unlocks symbolic methods (BDDs, SAT/SMT-based bounded model checking), partial-order reduction, symmetry reduction, and abstraction/predicate refinement."
+  },
+  {
+    "field": "algorithms, complexity, and computability",
+    "name": "Curse of dimensionality",
+    "aliases": [
+      "dimensionality curse",
+      "Hughes phenomenon"
+    ],
+    "symptom": "A distance- or grid-based method that worked with a handful of features degrades badly as you add more: neighbors become meaningless because everything is nearly equidistant, data turns sparse, and volume demands explode.",
+    "framework": "In high dimensions, distance concentration and exponential volume growth break intuition. Unlocks dimensionality reduction (PCA, random projections), feature selection, metric learning, and approximate nearest-neighbor (LSH) instead of exact geometry."
+  },
+  {
+    "field": "algorithms, complexity, and computability",
+    "name": "Birthday problem",
+    "aliases": [
+      "birthday paradox",
+      "birthday attack (cryptographic)"
+    ],
+    "symptom": "Duplicate hashes, IDs, or keys start colliding far sooner than the enormous key space suggests they should — collisions appear around the square root of the space size, not near its full size.",
+    "framework": "Collision probability crosses 50% at roughly √N draws. Unlocks correct sizing: to resist collisions/forgery at b bits of security you need ~2b-bit outputs; use 128-bit+ random identifiers and hash widths sized against the square-root attack."
+  },
+  {
+    "field": "algorithms, complexity, and computability",
+    "name": "Amdahl's Law",
+    "aliases": [
+      "Amdahl's argument",
+      "law of diminishing parallel returns"
+    ],
+    "symptom": "You parallelize aggressively and add cores, but speedup flattens out fast — doubling the hardware yields almost nothing, and the stubborn serial part dominates the runtime.",
+    "framework": "Speedup is capped at 1/(s + (1−s)/N) by the serial fraction s. Redirects effort to shrinking the serial portion or the sync/communication overhead, and pairs with Gustafson's Law when you can scale the problem size instead."
+  },
+  {
+    "field": "algorithms, complexity, and computability",
+    "name": "Belady's anomaly",
+    "aliases": [
+      "FIFO anomaly",
+      "page-replacement anomaly"
+    ],
+    "symptom": "You enlarge the cache or page-frame pool expecting fewer misses, and instead the miss rate gets worse — more memory produces worse behavior, which feels like a bug in your measurements.",
+    "framework": "Certain replacement policies (notably FIFO) are non-monotonic in cache size. Unlocks the notion of stack algorithms (LRU, OPT) that are provably immune, so switching policy removes the anomaly."
+  },
+  {
+    "field": "algorithms, complexity, and computability",
+    "name": "Convoy effect",
+    "aliases": [
+      "convoy phenomenon",
+      "head-of-line blocking (queueing)"
+    ],
+    "symptom": "One long-running job sits at the front of a first-come-first-served queue and holds up a crowd of quick jobs behind it, collapsing overall throughput and latency even though most work is tiny.",
+    "framework": "FIFO scheduling lets a slow item block fast ones. Unlocks shortest-job-first / shortest-remaining-time scheduling, preemption/time-slicing, and separating traffic into multiple queues by cost class."
+  },
+  {
+    "field": "algorithms, complexity, and computability",
+    "name": "Algorithmic complexity attack",
+    "aliases": [
+      "hash flooding",
+      "hash-collision DoS",
+      "regex denial of service (ReDoS)"
+    ],
+    "symptom": "A structure that is fast on average — a hash table, a backtracking regex — grinds to a halt under carefully chosen inputs. An adversary can trigger your worst case on demand and take the service down with little traffic.",
+    "framework": "The gap between average- and worst-case complexity is an attack surface. Unlocks keyed/randomized hashing (SipHash), worst-case-bounded structures (balanced trees), and linear-time regex engines (RE2) or input limits."
+  },
+  {
+    "field": "algorithms, complexity, and computability",
+    "name": "TOCTOU race condition",
+    "aliases": [
+      "time-of-check to time-of-use",
+      "check-then-act race"
+    ],
+    "symptom": "You verify a condition — a file's permissions, an object's existence, a balance — and then act on it, but the state changes in the tiny window between the check and the use, so your validated assumption is already stale (and exploitable).",
+    "framework": "The check and the use aren't atomic. Unlocks operating on handles/descriptors instead of re-resolvable names, atomic check-and-act primitives (open-with-flags, compare-and-swap), and transactions/locks spanning the whole operation."
+  },
+  {
+    "field": "algorithms, complexity, and computability",
+    "name": "Overlapping subproblems",
+    "aliases": [
+      "exponential naive recursion",
+      "recomputation blowup"
+    ],
+    "symptom": "Your clean recursive solution is correct but mysteriously exponential on small-looking inputs, because it keeps re-deriving the same subresults over and over across different branches of the recursion tree.",
+    "framework": "When subproblems recur and the problem has optimal substructure, cache them. Unlocks dynamic programming: top-down memoization or bottom-up tabulation, turning exponential time into polynomial."
+  },
+  {
+    "field": "algorithms, complexity, and computability",
+    "name": "Catastrophic cancellation",
+    "aliases": [
+      "loss of significance",
+      "subtractive cancellation"
+    ],
+    "symptom": "A floating-point computation returns wildly wrong or noisy results whenever it subtracts two nearly-equal quantities — the leading digits cancel and what's left is dominated by rounding error, even though each input looked precise.",
+    "framework": "Subtracting close numbers amplifies relative error. Unlocks numerically stable reformulations (e.g., the alternate quadratic formula, log-sum-exp, Kahan summation) and error analysis to reorder operations and avoid the fragile subtraction."
+  },
+  {
+    "field": "statistics, probability, and experiment design",
+    "name": "Simpson's Paradox",
+    "aliases": [
+      "Yule–Simpson effect",
+      "aggregation paradox",
+      "reversal paradox",
+      "amalgamation paradox"
+    ],
+    "symptom": "A treatment or option looks better within every subgroup you examine, yet when you pool all the data together the advantage flips and it looks worse. The direction of the effect depends entirely on whether you split or combine.",
+    "framework": "A confounder plus unequal subgroup sizes makes the pooled association reverse the stratified one; the fix is to stratify or weight on the confounder, check collapsibility, and use a causal DAG to decide which table (pooled vs. stratified) actually answers your question."
+  },
+  {
+    "field": "statistics, probability, and experiment design",
+    "name": "Base Rate Fallacy",
+    "aliases": [
+      "base rate neglect",
+      "prevalence neglect",
+      "false positive paradox"
+    ],
+    "symptom": "A highly accurate test comes back positive and everyone assumes the condition is almost certainly present, but because the condition is rare, most positives turn out to be false alarms and the true chance is surprisingly low.",
+    "framework": "Naming it invokes Bayes' theorem and the distinction between sensitivity/specificity and positive predictive value; the fix is to combine the likelihood ratio with the prior prevalence rather than reading the test's accuracy as the answer."
+  },
+  {
+    "field": "statistics, probability, and experiment design",
+    "name": "Regression to the Mean",
+    "aliases": [
+      "regression toward the mean",
+      "regression fallacy",
+      "Galton's regression"
+    ],
+    "symptom": "You single out the worst performers, intervene, remeasure, and they improve—so the program looks effective. But extreme cases picked partly by luck naturally drift back toward average on their own, with or without the intervention.",
+    "framework": "Any measurement with noise makes extreme observations move toward the mean on retest; the fix is a randomized control group (or a suitable comparison) so genuine effect is separated from the mechanical rebound."
+  },
+  {
+    "field": "statistics, probability, and experiment design",
+    "name": "Multiple Comparisons Problem",
+    "aliases": [
+      "multiplicity",
+      "look-elsewhere effect",
+      "family-wise error inflation",
+      "multiple testing problem"
+    ],
+    "symptom": "You slice the data by many subgroups, outcomes, or variables, and eventually something crosses the significance threshold. Each individual test looked fine, but 'a' finding was almost guaranteed to pop up somewhere.",
+    "framework": "Running many tests inflates the chance of at least one false positive; corrections include Bonferroni/Holm for family-wise error and Benjamini–Hochberg for false discovery rate, or a pre-specified single primary endpoint."
+  },
+  {
+    "field": "statistics, probability, and experiment design",
+    "name": "Optional Stopping",
+    "aliases": [
+      "data peeking",
+      "peeking problem",
+      "sequential testing bias",
+      "repeated significance testing"
+    ],
+    "symptom": "You monitor an experiment as data accumulates and stop the moment the result crosses significance. It feels efficient, but the p-value you report is far too small for how the data actually behaved.",
+    "framework": "Testing repeatedly with a fixed threshold guarantees eventual 'significance' under the null; the fix is sequential analysis with alpha-spending functions, group-sequential designs, or Bayesian methods that permit valid continuous monitoring."
+  },
+  {
+    "field": "statistics, probability, and experiment design",
+    "name": "Garden of Forking Paths",
+    "aliases": [
+      "p-hacking",
+      "researcher degrees of freedom",
+      "data dredging",
+      "specification search"
+    ],
+    "symptom": "There are many defensible ways to clean, code, and analyze the data, and after trying several you land on the version that reaches significance. No single step felt dishonest, yet the result is fragile and won't replicate.",
+    "framework": "Flexibility in analysis choices constitutes implicit multiple testing even without explicit repeated tests; remedies are pre-registration, a locked analysis plan, held-out data, and multiverse/specification-curve analysis."
+  },
+  {
+    "field": "statistics, probability, and experiment design",
+    "name": "Survivorship Bias",
+    "aliases": [
+      "survival bias",
+      "selection on the outcome"
+    ],
+    "symptom": "You study the winners, the still-operating firms, or the returning units to learn what makes success, but the ones that failed and disappeared were never in your sample, so your 'lessons' are systematically distorted.",
+    "framework": "Conditioning on having survived a selection process biases the observed distribution; recognizing it (Wald's returning-bombers logic) forces you to account for the dropped-out, non-surviving cases explicitly."
+  },
+  {
+    "field": "statistics, probability, and experiment design",
+    "name": "Berkson's Paradox",
+    "aliases": [
+      "Berkson's bias",
+      "admission rate bias",
+      "collider stratification bias"
+    ],
+    "symptom": "Within a selected pool—say, hospitalized patients or admitted applicants—two traits appear negatively correlated even though they're unrelated (or positively related) in the general population.",
+    "framework": "Conditioning on a common effect (a collider) of two variables induces a spurious association between them; the DAG-based fix is to avoid selecting or stratifying on that collider, or to model the selection mechanism."
+  },
+  {
+    "field": "statistics, probability, and experiment design",
+    "name": "Confounding",
+    "aliases": [
+      "omitted variable bias",
+      "lurking variable",
+      "third-variable problem",
+      "common cause"
+    ],
+    "symptom": "Two quantities move together tightly and it's tempting to call one the cause of the other, but a hidden variable is driving both, so adjusting or eliminating it makes the apparent relationship shrink or vanish.",
+    "framework": "A common cause of exposure and outcome biases the naive association; the fix is identification via the backdoor criterion on a DAG—controlling for the confounder, randomization, or instrumental variables."
+  },
+  {
+    "field": "statistics, probability, and experiment design",
+    "name": "Ecological Fallacy",
+    "aliases": [
+      "aggregation fallacy",
+      "Robinson's fallacy",
+      "cross-level inference error"
+    ],
+    "symptom": "A correlation measured across groups (regions, schools, countries) is confidently applied to individuals, but the individual-level relationship turns out to be weaker, absent, or even reversed.",
+    "framework": "Group-averaged associations need not hold at the individual level; the fix is to keep the unit of analysis matched to the unit of inference and to use multilevel/hierarchical models when levels are mixed."
+  },
+  {
+    "field": "statistics, probability, and experiment design",
+    "name": "Gambler's Fallacy",
+    "aliases": [
+      "Monte Carlo fallacy",
+      "maturity of chances",
+      "law of averages misapplied"
+    ],
+    "symptom": "After a long streak of one outcome, the opposite starts to feel 'due,' and you bet accordingly as if the process were self-correcting on the next trial.",
+    "framework": "For independent trials the process has no memory, so past results don't shift the next probability; naming it separates true independence from genuinely dependent processes and from the (distinct) hot-hand question."
+  },
+  {
+    "field": "statistics, probability, and experiment design",
+    "name": "Prosecutor's Fallacy",
+    "aliases": [
+      "transposed conditional",
+      "confusion of the inverse",
+      "inverse conditional fallacy"
+    ],
+    "symptom": "A tiny probability of the evidence assuming innocence is quoted, and everyone treats it as the probability the person is innocent—the two conditionals get silently swapped.",
+    "framework": "P(evidence | innocent) is not P(innocent | evidence); Bayes' theorem and likelihood ratios (weighed against the relevant reference population) restore the correct posterior."
+  },
+  {
+    "field": "statistics, probability, and experiment design",
+    "name": "Publication Bias",
+    "aliases": [
+      "file drawer problem",
+      "reporting bias",
+      "positive-results bias"
+    ],
+    "symptom": "The published literature on an effect looks overwhelmingly positive and consistent, but the null and failed studies quietly never made it into print, so the pooled evidence overstates the effect.",
+    "framework": "Selective publication of significant results skews meta-analytic estimates; detection and correction use funnel plots, Egger's regression, trim-and-fill, p-curve, and study registries."
+  },
+  {
+    "field": "statistics, probability, and experiment design",
+    "name": "Overfitting",
+    "aliases": [
+      "over-parameterization",
+      "curve fitting",
+      "capitalizing on chance"
+    ],
+    "symptom": "Your model fits the data you built it on beautifully, but its performance collapses the moment it meets fresh data—it memorized the noise instead of the signal.",
+    "framework": "Excess model flexibility relative to signal drives the bias–variance tradeoff toward variance; remedies are cross-validation, regularization (ridge/lasso), simpler models, and honest out-of-sample evaluation."
+  },
+  {
+    "field": "statistics, probability, and experiment design",
+    "name": "Goodhart's Law",
+    "aliases": [
+      "Campbell's law",
+      "surrogation",
+      "metric gaming",
+      "teaching to the test"
+    ],
+    "symptom": "A number that used to be a reliable indicator becomes an official target, and soon people optimize it directly—so it climbs while the underlying thing it was supposed to reflect stagnates or worsens.",
+    "framework": "'When a measure becomes a target, it ceases to be a good measure': the proxy decouples from the true objective; the fix is multiple/rotating metrics, guardrail measures, and rewarding the outcome rather than the proxy."
+  },
+  {
+    "field": "statistics, probability, and experiment design",
+    "name": "Immortal Time Bias",
+    "aliases": [
+      "guarantee-time bias",
+      "survivor treatment selection bias",
+      "time-dependent bias"
+    ],
+    "symptom": "A group defined by receiving some treatment or reaching some milestone appears to live longer, but members had to survive long enough just to qualify for that group, so the extra time is baked into the definition.",
+    "framework": "Misclassifying person-time during which the outcome could not occur inflates the treated group's survival; correct with time-dependent covariates, landmark analysis, or properly aligned start-of-follow-up."
+  },
+  {
+    "field": "statistics, probability, and experiment design",
+    "name": "Winner's Curse",
+    "aliases": [
+      "effect size inflation",
+      "significance filter",
+      "the winner's curse in estimation"
+    ],
+    "symptom": "The very studies or genes or variables that first clear the significance bar report impressively large effects, but replications and follow-ups consistently find much smaller ones.",
+    "framework": "Selecting estimates conditional on passing a threshold upward-biases their magnitude, especially at low power; fixes include shrinkage/regularized estimators, replication, and reporting unfiltered effect sizes."
+  },
+  {
+    "field": "statistics, probability, and experiment design",
+    "name": "Pseudoreplication",
+    "aliases": [
+      "unit of analysis error",
+      "clustered data ignored",
+      "non-independence of observations"
+    ],
+    "symptom": "You count many correlated measurements—repeated readings, littermates, pupils in the same class—as if they were independent, so your sample size looks huge and your standard errors look impressively tiny.",
+    "framework": "Treating clustered/correlated observations as independent understates variance and inflates false positives; the fix is mixed-effects/hierarchical models, cluster-robust standard errors, or analysis at the correct experimental unit."
+  },
+  {
+    "field": "statistics, probability, and experiment design",
+    "name": "Nonresponse Bias",
+    "aliases": [
+      "self-selection bias",
+      "participation bias",
+      "volunteer bias"
+    ],
+    "symptom": "Your survey or study draws its conclusions only from the people who chose to answer or show up, and those who declined differ systematically, so even a large sample points in the wrong direction.",
+    "framework": "Missingness related to the outcome (the classic 'Literary Digest' failure) breaks representativeness; remedies are response-propensity weighting, sensitivity analysis under MNAR assumptions, and improving/ characterizing response rates."
+  },
+  {
+    "field": "machine learning and data",
+    "name": "Data Leakage",
+    "aliases": [
+      "target leakage",
+      "train-test contamination",
+      "information leakage"
+    ],
+    "symptom": "Your model scores almost too well in validation—suspiciously high accuracy—but collapses in production. When you dig in, a feature turns out to be a stand-in for the answer that wouldn't actually be available at prediction time.",
+    "framework": "Names the failure where information from outside the training-time knowledge horizon sneaks into features. Fix: strict temporal/causal cutoffs, fit preprocessing only on training folds inside the CV loop (pipelines), audit each feature for 'would this be known before the label?', and separate holdout by entity/time."
+  },
+  {
+    "field": "machine learning and data",
+    "name": "Class Imbalance",
+    "aliases": [
+      "imbalanced classes",
+      "skewed class distribution",
+      "rare-event problem"
+    ],
+    "symptom": "The model reaches 99% accuracy yet never flags the thing you actually care about. It quietly learns to always predict the majority category and calls it a day.",
+    "framework": "Unlocks the imbalanced-learning toolkit: switch metrics to precision/recall/F1/PR-AUC, use resampling (SMOTE, undersampling), class weights, threshold tuning, and cost-sensitive learning. Reframes 'accuracy' as the wrong objective."
+  },
+  {
+    "field": "machine learning and data",
+    "name": "The Curse of Dimensionality",
+    "aliases": [
+      "Bellman's curse",
+      "high-dimensional sparsity"
+    ],
+    "symptom": "Adding more features stops helping and starts hurting; distances between points become meaningless, everything looks equidistant, and you need exponentially more data to fill the space.",
+    "framework": "Names why volume grows exponentially with dimensions. Unlocks dimensionality reduction (PCA, UMAP), feature selection, manifold learning, and distance-metric caution in kNN/clustering."
+  },
+  {
+    "field": "machine learning and data",
+    "name": "Concept Drift",
+    "aliases": [
+      "model drift",
+      "dataset shift",
+      "nonstationarity",
+      "population drift"
+    ],
+    "symptom": "A model that launched great slowly degrades over weeks or months for no code change. The world shifted underneath it and the old patterns no longer hold.",
+    "framework": "Unlocks the dataset-shift taxonomy (covariate shift, prior shift, concept drift). Fix: drift detection monitoring, scheduled retraining, online learning, and rolling-window validation."
+  },
+  {
+    "field": "machine learning and data",
+    "name": "Multicollinearity",
+    "aliases": [
+      "collinearity",
+      "correlated predictors"
+    ],
+    "symptom": "Your regression coefficients are wildly unstable, flip signs when you add a variable, and have huge standard errors—yet the overall fit is fine. Individual feature importances feel untrustworthy.",
+    "framework": "Unlocks VIF diagnostics, ridge regression, PCA, and dropping/combining redundant predictors. Explains why coefficient interpretation breaks even when prediction doesn't."
+  },
+  {
+    "field": "machine learning and data",
+    "name": "P-hacking",
+    "aliases": [
+      "data dredging",
+      "significance chasing",
+      "the garden of forking paths",
+      "multiple comparisons problem"
+    ],
+    "symptom": "After trying many variables, subgroups, and cutoffs, you finally find a 'significant' result—but it won't replicate. The more tests you ran, the more likely one lit up by chance.",
+    "framework": "Unlocks multiple-testing corrections (Bonferroni, Benjamini-Hochberg FDR), pre-registration, holdout validation, and family-wise error control. Names the inflation of false positives from repeated peeking."
+  },
+  {
+    "field": "machine learning and data",
+    "name": "Vanishing/Exploding Gradients",
+    "aliases": [
+      "vanishing gradient problem",
+      "exploding gradients"
+    ],
+    "symptom": "A deep network trains agonizingly slowly or diverges to NaN; early layers barely update while loss stagnates, or weights blow up uncontrollably as depth increases.",
+    "framework": "Unlocks ReLU activations, careful initialization (Xavier/He), batch/layer normalization, residual connections, gradient clipping, and LSTM/GRU gating for sequences."
+  },
+  {
+    "field": "machine learning and data",
+    "name": "Sampling Bias",
+    "aliases": [
+      "selection bias",
+      "non-representative sample",
+      "coverage bias"
+    ],
+    "symptom": "The model works on the test set but fails on real users because the people/events you collected data from weren't representative of who you actually serve.",
+    "framework": "Unlocks survey-sampling theory: importance weighting, reweighting/post-stratification, propensity adjustment, and defining the target population explicitly before collection."
+  },
+  {
+    "field": "machine learning and data",
+    "name": "Spurious Correlation",
+    "aliases": [
+      "confounding",
+      "shortcut learning",
+      "Clever Hans effect"
+    ],
+    "symptom": "The model achieves great scores by latching onto an accidental, irrelevant cue—the background, a watermark, a ruler in the photo—rather than the true signal. It breaks the moment that crutch disappears.",
+    "framework": "Unlocks causal inference (confounders, DAGs), invariant risk minimization, dataset debiasing, saliency auditing, and out-of-distribution testing to expose the shortcut."
+  },
+  {
+    "field": "machine learning and data",
+    "name": "Cold Start Problem",
+    "aliases": [
+      "cold-start",
+      "new-user/new-item problem"
+    ],
+    "symptom": "Your recommender or personalization system has nothing useful to say about a brand-new user or item because there's no interaction history to learn from yet.",
+    "framework": "Unlocks hybrid recommenders, content-based fallbacks, popularity priors, bandit exploration, and metadata/embedding transfer to bootstrap the empty-history case."
+  },
+  {
+    "field": "machine learning and data",
+    "name": "Feedback Loops",
+    "aliases": [
+      "runaway feedback loop",
+      "self-fulfilling prediction",
+      "echo chamber effect",
+      "model-induced distribution shift"
+    ],
+    "symptom": "Your deployed model's own predictions shape the future data it's retrained on, so small biases amplify over time—patrolling where you predicted crime finds more crime there, confirming the prediction.",
+    "framework": "Unlocks the study of performative prediction and pernicious feedback: counterfactual logging, off-policy evaluation, exploration, and monitoring for self-reinforcing drift."
+  },
+  {
+    "field": "machine learning and data",
+    "name": "The Accuracy Paradox",
+    "aliases": [
+      "accuracy trap",
+      "base-rate fallacy in classification"
+    ],
+    "symptom": "You optimize for and report a single headline accuracy number, and it looks excellent, yet the model is useless for the decision at hand because the classes are lopsided.",
+    "framework": "Unlocks proper metric selection: confusion matrices, precision/recall tradeoffs, ROC/PR curves, Matthews correlation, and aligning the metric with the business cost."
+  },
+  {
+    "field": "machine learning and data",
+    "name": "Label Noise",
+    "aliases": [
+      "noisy labels",
+      "annotation error",
+      "mislabeled data",
+      "ground-truth error"
+    ],
+    "symptom": "Your ceiling on performance seems capped and the model confidently 'errs' on examples that, on inspection, were actually labeled wrong. Two annotators often disagree on the same item.",
+    "framework": "Unlocks inter-annotator agreement metrics (Cohen's kappa), robust loss functions, confident learning / label cleaning, noise-transition modeling, and consensus labeling."
+  },
+  {
+    "field": "machine learning and data",
+    "name": "Catastrophic Forgetting",
+    "aliases": [
+      "catastrophic interference",
+      "continual-learning forgetting"
+    ],
+    "symptom": "You fine-tune a trained network on a new task and it suddenly loses its ability to do the old task it previously mastered—learning the new erases the old.",
+    "framework": "Unlocks continual/lifelong learning: elastic weight consolidation, rehearsal/replay buffers, parameter isolation, and regularization against drifting important weights."
+  },
+  {
+    "field": "economics, game theory, and mechanism design",
+    "name": "Adverse Selection",
+    "aliases": [
+      "market for lemons",
+      "lemons problem",
+      "hidden information",
+      "negative selection"
+    ],
+    "symptom": "At any price you set, only the worst-quality participants show up. Raising the price to cover losses drives the good ones away and quality spirals down toward collapse.",
+    "framework": "Akerlof's asymmetric-information market failure. Fix: screening (menus, deductibles), signaling (warranties, credentials), mandates/pooling, or reputation systems."
+  },
+  {
+    "field": "economics, game theory, and mechanism design",
+    "name": "Moral Hazard",
+    "aliases": [
+      "hidden action",
+      "hidden effort"
+    ],
+    "symptom": "Once someone is insured or paid up front, they take more risk or exert less care, because they no longer bear the full consequences of their behavior.",
+    "framework": "Principal–agent model with unobservable action. Fix: incentive-compatible contracts—deductibles/co-pays, performance pay, monitoring, deferred compensation."
+  },
+  {
+    "field": "economics, game theory, and mechanism design",
+    "name": "Principal–Agent Problem",
+    "aliases": [
+      "agency problem",
+      "agency dilemma",
+      "agency cost"
+    ],
+    "symptom": "The person acting on your behalf has their own objectives and better information than you, and you can't fully observe their effort—so their choices drift away from what you'd want.",
+    "framework": "Contract theory / agency theory (Ross, Holmström). Fix: optimal incentive contracts trading off risk-sharing against effort provision; align payoffs, add monitoring."
+  },
+  {
+    "field": "economics, game theory, and mechanism design",
+    "name": "Tragedy of the Commons",
+    "aliases": [
+      "commons problem",
+      "open-access resource depletion",
+      "overgrazing problem"
+    ],
+    "symptom": "A shared resource anyone can draw on gets overused to exhaustion. Each user captures the full private benefit of taking more while the depletion cost is spread across everyone.",
+    "framework": "Hardin's open-access externality; Ostrom's governance work. Fix: define property rights, quotas/cap-and-trade, Pigouvian charges, or community self-governance with monitoring and sanctions."
+  },
+  {
+    "field": "economics, game theory, and mechanism design",
+    "name": "Free Rider Problem",
+    "aliases": [
+      "collective action problem",
+      "public goods underprovision"
+    ],
+    "symptom": "Everyone enjoys the good whether they chip in or not, so no one volunteers to pay and the thing is chronically underfunded or never built.",
+    "framework": "Public goods theory (Samuelson condition; Olson's logic of collective action). Fix: compulsory taxation, group selectivity, or demand-revealing mechanisms (VCG/Clarke pivot tax)."
+  },
+  {
+    "field": "economics, game theory, and mechanism design",
+    "name": "Holdup Problem",
+    "aliases": [
+      "hold-up problem",
+      "opportunistic renegotiation"
+    ],
+    "symptom": "After one party sinks a relationship-specific investment, the other renegotiates to grab the surplus because the investor can no longer walk away cheaply. Foreseeing this, everyone underinvests up front.",
+    "framework": "Incomplete-contracts theory (Williamson; Grossman–Hart–Moore property rights). Fix: reallocate ownership/vertical integration, long-term contracts, or hostages/mutual investment."
+  },
+  {
+    "field": "economics, game theory, and mechanism design",
+    "name": "Time Inconsistency",
+    "aliases": [
+      "dynamic inconsistency",
+      "time-inconsistent preferences"
+    ],
+    "symptom": "The plan that's optimal to announce today becomes one you're tempted to abandon when the moment arrives—even though nothing new has been learned.",
+    "framework": "Kydland–Prescott (macro policy) and hyperbolic discounting (self-control). Fix: commitment devices, rules over discretion, delegation to independent bodies, reputation."
+  },
+  {
+    "field": "economics, game theory, and mechanism design",
+    "name": "Braess's Paradox",
+    "aliases": [
+      "Braess paradox"
+    ],
+    "symptom": "You add a shortcut or extra capacity to a congested network expecting things to speed up, but selfish routing shifts and overall performance gets worse.",
+    "framework": "Congestion/routing games; price of anarchy. Fix: congestion tolls (marginal-cost pricing) or capacity design that steers equilibrium toward the social optimum—sometimes by removing links."
+  },
+  {
+    "field": "economics, game theory, and mechanism design",
+    "name": "Arrow's Impossibility Theorem",
+    "aliases": [
+      "Arrow paradox",
+      "general possibility theorem"
+    ],
+    "symptom": "Every rule you try for turning individuals' rankings into a single group ranking ends up violating one of your obviously-reasonable fairness requirements.",
+    "framework": "Social choice theory (Arrow). Fix: relax a condition—admit cardinal/intensity information, restrict the domain (single-peaked), or accept a benign dictator-like agenda setter."
+  },
+  {
+    "field": "economics, game theory, and mechanism design",
+    "name": "Condorcet Paradox",
+    "aliases": [
+      "voting paradox",
+      "cyclical majorities",
+      "Condorcet cycle"
+    ],
+    "symptom": "A majority prefers A to B, another majority prefers B to C, and yet another prefers C to A. Group preference runs in circles with no stable winner.",
+    "framework": "Social choice / voting theory. Fix: Condorcet-consistent methods where a winner exists, single-peaked preference domains (median-voter result), or agenda control awareness."
+  },
+  {
+    "field": "economics, game theory, and mechanism design",
+    "name": "Gibbard–Satterthwaite Theorem",
+    "aliases": [
+      "manipulability theorem",
+      "strategyproofness impossibility"
+    ],
+    "symptom": "No matter how you design the group's decision rule, some participants can get a better outcome by misreporting their true preferences.",
+    "framework": "Mechanism design impossibility (Gibbard; Satterthwaite). Fix: move to quasilinear/money settings (VCG), restrict to single-peaked domains (median rule), or accept and manage manipulation."
+  },
+  {
+    "field": "economics, game theory, and mechanism design",
+    "name": "Myerson–Satterthwaite Theorem",
+    "aliases": [
+      "impossibility of efficient bilateral trade"
+    ],
+    "symptom": "You try to design a mechanism where a buyer and seller with private valuations always trade when they should, but no rule can be simultaneously efficient, voluntary, and self-financing—trades that create value still fall through.",
+    "framework": "Bayesian mechanism-design impossibility. Fix: accept some inefficiency, inject an outside subsidy to balance the budget, or relax individual-rationality/participation guarantees."
+  },
+  {
+    "field": "economics, game theory, and mechanism design",
+    "name": "Revenue Equivalence Theorem",
+    "aliases": [
+      "revenue equivalence principle"
+    ],
+    "symptom": "You keep redesigning the auction format hoping to raise more money, but under standard assumptions every format yields the same expected revenue.",
+    "framework": "Auction theory (Vickrey; Myerson). Fix: to beat it you must change a maintained assumption—set optimal reserve prices, exploit bidder asymmetry or risk aversion, or handle correlated values (Myerson optimal auction)."
+  },
+  {
+    "field": "economics, game theory, and mechanism design",
+    "name": "Double Marginalization",
+    "aliases": [
+      "double markup",
+      "chain of monopolies problem"
+    ],
+    "symptom": "Two firms in a supply chain each add their own markup; the final price ends up higher and their combined profit lower than if a single firm controlled the whole chain.",
+    "framework": "Vertical relations / industrial organization (Spengler). Fix: vertical integration, two-part tariffs, quantity forcing, or resale-price maintenance to eliminate the stacked margin."
+  },
+  {
+    "field": "economics, game theory, and mechanism design",
+    "name": "Ratchet Effect",
+    "aliases": [
+      "ratchet problem"
+    ],
+    "symptom": "Perform well this period and your quota or target gets raised next period—so agents deliberately hold back output to avoid being saddled with tougher future standards.",
+    "framework": "Dynamic incentives with soft information (Weitzman; Laffont–Tirole). Fix: commit not to revise targets based on revealed ability, or use long-term contracts that separate current performance from future demands."
+  },
+  {
+    "field": "economics, game theory, and mechanism design",
+    "name": "Lucas Critique",
+    "aliases": [
+      "Lucas critique of econometric policy evaluation"
+    ],
+    "symptom": "A model that fit historical data beautifully breaks down the moment you use it to design policy, because people change their behavior and expectations in response to the new regime.",
+    "framework": "Rational expectations macro (Lucas). Fix: build models on deep structural parameters (preferences, technology, constraints) that are invariant to policy, rather than reduced-form historical correlations."
+  },
+  {
+    "field": "cognitive science, judgment, and decision-making",
+    "name": "Anchoring effect",
+    "aliases": [
+      "anchoring bias",
+      "anchoring-and-adjustment",
+      "focalism"
+    ],
+    "symptom": "The first number that gets mentioned in a negotiation or estimate seems to drag every later guess toward it, even when everyone knows that number was arbitrary or irrelevant. Final estimates cluster suspiciously close to whatever value happened to be seen first.",
+    "framework": "Tversky & Kahneman's anchoring-and-adjustment heuristic (insufficient adjustment from a starting value). Fixes: generate your own estimate before seeing others', 'consider the opposite,' set anchors deliberately, and use structured/blind estimation to prevent contamination."
+  },
+  {
+    "field": "cognitive science, judgment, and decision-making",
+    "name": "Base rate neglect",
+    "aliases": [
+      "base rate fallacy",
+      "neglect of prior probability",
+      "insensitivity to prior odds"
+    ],
+    "symptom": "A test is '95% accurate' and comes back positive for a rare condition, so everyone panics — yet because the condition is so uncommon, most positives are actually false alarms. People fixate on the specific evidence and forget how rare the thing was to begin with.",
+    "framework": "Bayesian reasoning: posterior odds = prior odds × likelihood ratio. The name unlocks natural-frequency reformatting (Gigerenzer), explicit priors, and diagnostic-accuracy math (sensitivity/specificity, positive predictive value)."
+  },
+  {
+    "field": "cognitive science, judgment, and decision-making",
+    "name": "Sunk cost fallacy",
+    "aliases": [
+      "escalation of commitment",
+      "Concorde fallacy",
+      "throwing good money after bad"
+    ],
+    "symptom": "A project is clearly failing, but the team keeps pouring in time and money because of everything already invested. Walking away feels like 'wasting' what was spent, so they double down instead of cutting losses.",
+    "framework": "Rational choice theory: only marginal future costs/benefits should drive decisions; past irrecoverable spend is irrelevant. Fixes: reframe as 'would I start this today?', pre-commit to kill criteria, separate the decider from the original investor."
+  },
+  {
+    "field": "cognitive science, judgment, and decision-making",
+    "name": "Confirmation bias",
+    "aliases": [
+      "myside bias",
+      "congruence bias",
+      "confirmatory search"
+    ],
+    "symptom": "You have a hunch, and somehow every article, data point, and anecdote you notice seems to support it. Contradicting evidence gets explained away or never sought in the first place, so your confidence only ever grows.",
+    "framework": "Wason's hypothesis-testing work; falsificationism. The name unlocks disconfirmation strategies: 'consider the opposite,' actively seek falsifying tests, red-teaming, pre-registration, and devil's advocate roles."
+  },
+  {
+    "field": "cognitive science, judgment, and decision-making",
+    "name": "Availability heuristic",
+    "aliases": [
+      "availability bias",
+      "ease-of-recall bias"
+    ],
+    "symptom": "Right after seeing news of a plane crash or shark attack, those risks feel enormous and imminent, while duller but far deadlier risks barely register. Vivid, recent, easily-recalled examples dominate your sense of how likely things are.",
+    "framework": "Tversky & Kahneman: frequency judged by ease of retrieval, not actual statistics. Fix: replace gut frequency with base-rate data, reference classes, and actuarial figures rather than memorable instances."
+  },
+  {
+    "field": "cognitive science, judgment, and decision-making",
+    "name": "Planning fallacy",
+    "aliases": [
+      "optimism bias in scheduling",
+      "inside-view estimation error"
+    ],
+    "symptom": "Every estimate for how long a task will take comes in optimistic, and it happens over and over — even after being burned repeatedly, the next plan still assumes the best case with no slippage.",
+    "framework": "Kahneman & Tversky; Flyvbjerg's megaproject work. Fix: reference-class forecasting (the 'outside view') — base estimates on the distribution of outcomes for similar past projects rather than task-by-task bottom-up guesses."
+  },
+  {
+    "field": "cognitive science, judgment, and decision-making",
+    "name": "Fundamental attribution error",
+    "aliases": [
+      "correspondence bias",
+      "overattribution effect"
+    ],
+    "symptom": "When someone else messes up you conclude they're careless or incompetent, but when you do the same thing you blame the traffic, the deadline, or bad luck. You read others' behavior as character while reading your own as circumstance.",
+    "framework": "Ross's attribution theory; actor–observer asymmetry. Fix: deliberately consider situational constraints on others, gather base rates of behavior across situations, and design systems rather than blaming individuals."
+  },
+  {
+    "field": "cognitive science, judgment, and decision-making",
+    "name": "Dunning–Kruger effect",
+    "aliases": [
+      "unskilled-and-unaware effect",
+      "double curse of incompetence"
+    ],
+    "symptom": "The people with the weakest grasp of a topic are often the most confident and loudest, while genuine experts hedge and second-guess. Lack of skill seems to come bundled with lack of awareness of that lack.",
+    "framework": "Kruger & Dunning: metacognitive deficit — the skills to perform are the same skills needed to judge performance. Fix: external calibration, feedback, and teaching people the domain (which improves self-assessment)."
+  },
+  {
+    "field": "cognitive science, judgment, and decision-making",
+    "name": "Hindsight bias",
+    "aliases": [
+      "knew-it-all-along effect",
+      "creeping determinism"
+    ],
+    "symptom": "After an outcome is known, it suddenly feels obvious and predictable — 'anyone could have seen that coming.' Past uncertainty gets erased, and decisions made under genuine ambiguity get judged as if the answer was clear all along.",
+    "framework": "Fischhoff's work on outcome knowledge distorting memory of prior probability. Fix: decision journals recording predictions before outcomes, process-based (not outcome-based) evaluation, and pre-mortems."
+  },
+  {
+    "field": "cognitive science, judgment, and decision-making",
+    "name": "Framing effect",
+    "aliases": [
+      "framing bias",
+      "valence framing",
+      "attribute framing"
+    ],
+    "symptom": "People make opposite choices depending on whether an option is described as '90% survival' versus '10% mortality,' or 'a discount for cash' versus 'a surcharge for credit' — even though the underlying facts are identical.",
+    "framework": "Prospect theory (Tversky & Kahneman): choices depend on reference points and gain/loss framing. Fix: restate every option in multiple frames, convert to a common absolute scale, and check for description invariance."
+  },
+  {
+    "field": "cognitive science, judgment, and decision-making",
+    "name": "Conjunction fallacy",
+    "aliases": [
+      "Linda problem",
+      "representativeness error"
+    ],
+    "symptom": "A detailed, story-like scenario ('bank teller AND activist') feels more probable than a plain broad one ('bank teller'), even though adding specifics can only make something less likely. Vivid, coherent narratives get rated as more likely than the categories that contain them.",
+    "framework": "Tversky & Kahneman's representativeness heuristic. The name unlocks the rule that P(A∧B) ≤ P(A), plausibility-vs-probability distinctions, and natural-frequency reframing."
+  },
+  {
+    "field": "cognitive science, judgment, and decision-making",
+    "name": "Loss aversion",
+    "aliases": [
+      "losses loom larger than gains",
+      "prospect-theory asymmetry"
+    ],
+    "symptom": "Losing $100 stings roughly twice as much as gaining $100 feels good, so people cling to things, refuse fair bets, and take irrational risks to avoid booking a loss. The pain of giving something up dwarfs the pleasure of an equal gain.",
+    "framework": "Kahneman & Tversky's prospect theory (asymmetric value function). Fixes: reframe reference points, aggregate decisions rather than evaluating each in isolation, and design defaults knowing losses are weighted heavily."
+  },
+  {
+    "field": "cognitive science, judgment, and decision-making",
+    "name": "Endowment effect",
+    "aliases": [
+      "divestiture aversion",
+      "mere-ownership effect"
+    ],
+    "symptom": "The moment something becomes 'yours,' you demand far more to sell it than you'd ever have paid to buy it. Ownership inflates perceived value, and people hoard possessions they wouldn't purchase at their own asking price.",
+    "framework": "Thaler's behavioral economics; a consequence of loss aversion. Fix: use the 'would I buy this at this price today?' test, and separate ownership from valuation in pricing and decluttering decisions."
+  },
+  {
+    "field": "cognitive science, judgment, and decision-making",
+    "name": "Curse of knowledge",
+    "aliases": [
+      "curse of expertise",
+      "knowledge bias"
+    ],
+    "symptom": "An expert explains something and can't understand why the audience is lost — what's obvious to them feels like it should be obvious to everyone. They can no longer simulate not-knowing, so their explanations skip the crucial steps.",
+    "framework": "Camerer/Loewenstein/Weber; related to theory-of-mind failures. Fix: test explanations on real novices, use the Feynman technique, and get outside feedback rather than trusting your own sense of clarity."
+  },
+  {
+    "field": "cognitive science, judgment, and decision-making",
+    "name": "Illusion of explanatory depth",
+    "aliases": [
+      "IOED",
+      "illusion of understanding"
+    ],
+    "symptom": "You're sure you understand how a zipper, a toilet, or a policy works — until someone asks you to explain it step by step and you discover your knowledge is full of holes. Confidence in understanding far outstrips actual understanding.",
+    "framework": "Rozenblit & Keil. The name unlocks the diagnostic fix: ask people to give a mechanistic step-by-step explanation, which deflates false confidence and can even reduce political extremism."
+  },
+  {
+    "field": "cognitive science, judgment, and decision-making",
+    "name": "Choice overload",
+    "aliases": [
+      "paradox of choice",
+      "overchoice",
+      "choice paralysis"
+    ],
+    "symptom": "Adding more options was supposed to help, but past a point people freeze, defer the decision, or feel less satisfied with whatever they pick. Abundant selection produces paralysis and regret instead of freedom.",
+    "framework": "Iyengar & Lepper's jam study; Schwartz's 'Paradox of Choice.' Fixes: curate and reduce option sets, provide smart defaults, categorize choices, and stage decisions to limit simultaneous comparisons."
+  },
+  {
+    "field": "cognitive science, judgment, and decision-making",
+    "name": "Peak–end rule",
+    "aliases": [
+      "peak-end effect",
+      "duration neglect"
+    ],
+    "symptom": "People's memory of an experience is dominated by its most intense moment and how it ended, while the length of the experience barely matters — a long ordeal with a mild finish is remembered as better than a short one that ended badly.",
+    "framework": "Kahneman's experiencing-self vs. remembering-self. Fix: design experiences to end well and manage the peak; distinguish remembered utility from moment-to-moment experienced utility when evaluating outcomes."
+  },
+  {
+    "field": "cognitive science, judgment, and decision-making",
+    "name": "Decoy effect",
+    "aliases": [
+      "asymmetric dominance effect",
+      "attraction effect"
+    ],
+    "symptom": "Adding a third, obviously-inferior option suddenly makes one of the original two far more popular — people's preferences between A and B flip just because an irrelevant C was placed on the menu.",
+    "framework": "Huber, Payne & Puto; violates independence of irrelevant alternatives. The name unlocks context-dependent preference theory and menu/pricing design (and defenses against it)."
+  },
+  {
+    "field": "organizations, management, and process",
+    "name": "Parkinson's Law",
+    "aliases": [
+      "work expands to fill the time available"
+    ],
+    "symptom": "You gave a task three weeks and it took three weeks; you'd have sworn it needed three weeks — yet the same task under a two-day deadline somehow also gets done. Slack in the schedule silently gets consumed by elaboration, polishing, and meetings rather than finishing early.",
+    "framework": "Names the tendency of work (and bureaucracy, and resource use) to grow to consume whatever capacity is granted. Unlocks timeboxing, aggressive deadlines, WIP limits, fixed-time/variable-scope planning, and skepticism toward buffers that get absorbed instead of banked (see also Student Syndrome and Hofstadter's Law)."
+  },
+  {
+    "field": "organizations, management, and process",
+    "name": "The Peter Principle",
+    "aliases": [
+      "promotion to the level of incompetence",
+      "rising to your level of incompetence"
+    ],
+    "symptom": "Your best engineer became a mediocre manager; the star salesperson now flounders running the region. People keep getting promoted for excelling at their current job until they land in a role they're bad at — and then stay there, because there's no further promotion.",
+    "framework": "Names why hierarchies fill with people mismatched to their roles: promotion rewards mastery of the prior job, not aptitude for the next. Unlocks dual/technical career ladders, promote-then-validate trial periods, distinguishing individual-contributor from management tracks, and decoupling reward from vertical movement."
+  },
+  {
+    "field": "organizations, management, and process",
+    "name": "Brooks's Law",
+    "aliases": [
+      "adding manpower to a late software project makes it later",
+      "the mythical man-month"
+    ],
+    "symptom": "The project is behind, so you throw more people at it — and it slips further. New hires need ramp-up, existing staff stop producing to train them, and the number of communication channels explodes faster than the added hands can help.",
+    "framework": "Names the non-linearity of adding people to late, complex work: onboarding cost and communication overhead (n(n-1)/2 links) swamp added capacity. Unlocks staffing projects early not late, small teams, partitionable work design, and treating person-months as non-fungible."
+  },
+  {
+    "field": "organizations, management, and process",
+    "name": "Conway's Law",
+    "aliases": [
+      "organizations design systems that mirror their communication structure"
+    ],
+    "symptom": "Your software architecture weirdly matches your org chart — three teams produced a three-module system with awkward seams exactly where the teams don't talk. Trying to build a cleanly integrated product across siloed groups keeps yielding a fragmented one.",
+    "framework": "Names the isomorphism between system structure and org communication structure. Unlocks the 'Inverse Conway Maneuver' (reshape teams to get the architecture you want), team topologies, and treating org design as an architectural decision."
+  },
+  {
+    "field": "organizations, management, and process",
+    "name": "Groupthink",
+    "aliases": [
+      "concurrence-seeking",
+      "illusion of unanimity"
+    ],
+    "symptom": "The team reached consensus suspiciously fast, doubts went unvoiced, and dissenters self-censored to preserve harmony — then the confidently-agreed decision turned out to be obviously flawed in hindsight. Everyone felt the cohesion; no one stress-tested the plan.",
+    "framework": "Names the drive for harmony overriding realistic appraisal in cohesive groups. Unlocks assigning a devil's advocate/red team, pre-mortems, soliciting dissent first, anonymous input, and leaders withholding their opinion until others speak."
+  },
+  {
+    "field": "organizations, management, and process",
+    "name": "Law of Triviality",
+    "aliases": [
+      "bikeshedding",
+      "bike-shed effect",
+      "painting the bicycle shed"
+    ],
+    "symptom": "The meeting spent forty minutes debating the logo color or the office coffee, and two minutes rubber-stamping the multimillion-dollar architecture. Trivial, easy-to-grasp items attract endless opinion while consequential, complex ones sail through unexamined.",
+    "framework": "Names why groups lavish disproportionate attention on trivial, accessible issues. Unlocks time-boxing agenda items by importance, delegating low-stakes decisions to a single owner, reversible-vs-irreversible decision framing, and protecting deep-decision focus."
+  },
+  {
+    "field": "organizations, management, and process",
+    "name": "The Abilene Paradox",
+    "aliases": [
+      "mismanaged agreement",
+      "road to Abilene"
+    ],
+    "symptom": "The group collectively did something that not one member actually wanted, because each person assumed everyone else was on board and no one voiced their private reservation. Afterward everyone admits they'd have preferred the opposite.",
+    "framework": "Names a failure of managing agreement (not conflict): shared silence produces a decision nobody endorses. Unlocks surfacing private preferences safely, anonymous pre-votes, explicitly inviting objections, and distinguishing genuine consensus from assumed consensus."
+  },
+  {
+    "field": "organizations, management, and process",
+    "name": "Escalation of Commitment",
+    "aliases": [
+      "sunk cost fallacy",
+      "throwing good money after bad",
+      "commitment bias"
+    ],
+    "symptom": "The initiative is clearly failing, but because you've already poured in two years and a fortune, you keep funding it — reasoning that quitting now would 'waste' everything invested. The prior spend, which can't be recovered, is driving the decision to continue.",
+    "framework": "Names the irrational persistence in a losing course to justify past investment. Unlocks ignoring unrecoverable costs in forward decisions, stage-gates with kill criteria, separating the decision-maker from the original champion, and options thinking."
+  },
+  {
+    "field": "organizations, management, and process",
+    "name": "Social Loafing",
+    "aliases": [
+      "Ringelmann effect",
+      "free-riding",
+      "diffusion of effort"
+    ],
+    "symptom": "Individuals put in visibly less effort on the group task than they would alone; as the team grew, per-person output dropped and a couple of people quietly carried the rest. Responsibility feels shared, so each person eases off.",
+    "framework": "Names the decline in individual effort as group size grows and contributions become unidentifiable. Unlocks making individual contributions visible, smaller teams, clear role ownership, individual accountability alongside group goals, and meaningful task design."
+  },
+  {
+    "field": "organizations, management, and process",
+    "name": "Not Invented Here Syndrome",
+    "aliases": [
+      "NIH syndrome",
+      "reinventing the wheel"
+    ],
+    "symptom": "The team insists on building its own version of something that already exists as a mature, proven solution — dismissing external tools, libraries, or ideas simply because they originated elsewhere, and burning months rebuilding solved problems.",
+    "framework": "Names the cultural bias against externally-originated work. Unlocks explicit build-vs-buy analysis, rewarding reuse and adoption, boundary-spanning roles, and separating genuine fit concerns from ego/turf-driven rejection (contrast with justified caution)."
+  },
+  {
+    "field": "organizations, management, and process",
+    "name": "The Planning Fallacy",
+    "aliases": [
+      "optimism bias in estimation",
+      "Hofstadter's Law"
+    ],
+    "symptom": "Your estimates are consistently too optimistic — even after being burned repeatedly, the next plan again assumes the best case, ignores your own track record, and blows past its deadline and budget. Each task 'this time' feels like it'll go smoothly.",
+    "framework": "Names the systematic underestimation of task time/cost despite contrary experience. Unlocks reference-class forecasting (base rates from similar past projects), the outside view, unpacking tasks, and applying empirical fudge factors instead of best-case guesses."
+  },
+  {
+    "field": "organizations, management, and process",
+    "name": "The Principal-Agent Problem",
+    "aliases": [
+      "agency problem",
+      "agency dilemma",
+      "moral hazard"
+    ],
+    "symptom": "The person you hired to act on your behalf has their own interests, better information than you, and quietly optimizes for themselves — the broker, manager, or contractor makes choices good for them but not for you, and you can't fully observe what they're doing.",
+    "framework": "Names misaligned incentives and information asymmetry between a delegator and a delegate. Unlocks incentive alignment (skin in the game), monitoring and reporting, outcome-based contracts, transparency mechanisms, and reducing information gaps."
+  },
+  {
+    "field": "organizations, management, and process",
+    "name": "The Shirky Principle",
+    "aliases": [
+      "institutions try to preserve the problem to which they are the solution"
+    ],
+    "symptom": "The team, department, or vendor tasked with solving a problem somehow never quite eliminates it — because fully solving it would eliminate their reason to exist. Progress stalls right at the point where the fix would make the fixer unnecessary.",
+    "framework": "Names how entities become invested in perpetuating the problems that justify them. Unlocks aligning incentives with problem elimination not activity, sunset clauses, rotating ownership, and watching for maintained dependencies and manufactured indispensability."
+  },
+  {
+    "field": "organizations, management, and process",
+    "name": "Chesterton's Fence",
+    "aliases": [
+      "Chesterton's gate",
+      "don't remove a fence until you know why it was put up"
+    ],
+    "symptom": "A new leader or engineer rips out a rule, step, or piece of code that seemed pointless — and immediately triggers the failure the old thing was quietly preventing. The apparent uselessness was actually a sign you didn't yet understand its purpose.",
+    "framework": "Names the principle that you must understand why something exists before removing it. Unlocks investigating original rationale before reform, git-blame/decision archaeology, preserving institutional memory, and reversible cautious change over confident deletion."
+  },
+  {
+    "field": "organizations, management, and process",
+    "name": "The Watermelon Effect",
+    "aliases": [
+      "watermelon project",
+      "watermelon status reporting",
+      "green outside, red inside"
+    ],
+    "symptom": "Every project dashboard glows green right up until the deadline, when it abruptly collapses into failure. Status rolls up rosy at each level while the ground truth underneath is troubled — bad news gets sanded smooth on its way up.",
+    "framework": "Names status reporting that's green on the surface and red inside, driven by upward filtering of bad news. Unlocks psychological safety for reporting problems, leading indicators over lagging self-reports, skip-level and gemba checks, and rewarding early escalation."
+  },
+  {
+    "field": "organizations, management, and process",
+    "name": "The Semmelweis Reflex",
+    "aliases": [
+      "Semmelweis effect",
+      "reflexive rejection of new evidence"
+    ],
+    "symptom": "You present solid evidence that contradicts established practice, and instead of engaging with it, the organization reflexively dismisses it because it clashes with entrenched norms, egos, or 'how we've always done it.' The stronger the challenge to orthodoxy, the harder the rejection.",
+    "framework": "Names the knee-jerk rejection of evidence that contradicts established beliefs or paradigms. Unlocks structured evidence review, disconfirmation-seeking, decoupling ideas from their proponents' status, pilot experiments, and cultural norms that reward being proven wrong."
+  },
+  {
+    "field": "control theory, systems, and feedback",
+    "name": "Integrator windup",
+    "aliases": [
+      "reset windup",
+      "integral windup",
+      "controller windup"
+    ],
+    "symptom": "After a large command change the actuator slams into its physical limit and stays pinned; when the process finally catches up it overshoots hugely and recovers slowly — and the longer it was pinned, the worse the overshoot.",
+    "framework": "Anti-windup: the integral term keeps accumulating error while the actuator is saturated. Fixes include back-calculation/tracking, conditional (clamped) integration, and observer-based anti-windup."
+  },
+  {
+    "field": "control theory, systems, and feedback",
+    "name": "Bode sensitivity integral (waterbed effect)",
+    "aliases": [
+      "waterbed effect",
+      "area formula",
+      "conservation of sensitivity"
+    ],
+    "symptom": "You retune to crush tracking/disturbance error in one frequency band, and error quietly grows in another band; you can knock it down here only to have it pop up there, never winning everywhere.",
+    "framework": "Bode's sensitivity integral: the integral of log-sensitivity is conserved, so attenuation in one band forces amplification in another. Right-half-plane poles/zeros make the tradeoff strictly worse; drives loop-shaping choices."
+  },
+  {
+    "field": "control theory, systems, and feedback",
+    "name": "Non-minimum phase (RHP zero)",
+    "aliases": [
+      "right-half-plane zero",
+      "inverse response",
+      "undershoot"
+    ],
+    "symptom": "You command an increase and the output first moves the opposite way before turning around and heading where you wanted; pushing for faster response just makes it go unstable.",
+    "framework": "Right-half-plane zero fundamental limitation: bandwidth is capped by the zero and the plant can't be inverted. Recognize inverse response, back off the crossover, or redesign sensor/actuator placement."
+  },
+  {
+    "field": "control theory, systems, and feedback",
+    "name": "Derivative kick",
+    "aliases": [
+      "setpoint kick",
+      "derivative bump"
+    ],
+    "symptom": "Every time the operator types in a new target, the actuator gets a violent instantaneous spike, even though the process itself is perfectly calm.",
+    "framework": "Derivative-on-measurement: differentiating the setpoint step creates an impulse. Fix by taking the derivative of the measured variable only (and setpoint weighting on the proportional term)."
+  },
+  {
+    "field": "control theory, systems, and feedback",
+    "name": "Aliasing",
+    "aliases": [
+      "frequency folding",
+      "spectral folding"
+    ],
+    "symptom": "A genuinely fast oscillation shows up in your logged/sampled data as a slow drift or a phantom low-frequency wobble that doesn't physically exist.",
+    "framework": "Nyquist–Shannon sampling theorem: frequencies above half the sample rate fold down to false low frequencies. Add an analog anti-aliasing filter before the ADC and/or raise the sample rate."
+  },
+  {
+    "field": "control theory, systems, and feedback",
+    "name": "Limit cycle",
+    "aliases": [
+      "self-sustained oscillation",
+      "nonlinear oscillation"
+    ],
+    "symptom": "A nonlinear loop with no external forcing settles into a persistent oscillation of fixed amplitude and frequency that refuses to die out regardless of where it started.",
+    "framework": "Describing-function / harmonic-balance analysis predicts the amplitude and frequency from the nonlinearity (relay, saturation, backlash). Fix via dither, deadband tuning, or reshaping the linear loop."
+  },
+  {
+    "field": "control theory, systems, and feedback",
+    "name": "Sliding-mode chattering",
+    "aliases": [
+      "chatter",
+      "switching chatter"
+    ],
+    "symptom": "A switching controller keeps flipping across the target at very high frequency, buzzing the actuators, exciting unmodeled resonances and wearing hardware out.",
+    "framework": "Sliding-mode chattering: infinite-frequency ideal switching meets real dynamics. Fixes: boundary layer (saturation instead of sign), higher-order sliding modes (super-twisting), or observer-based smoothing."
+  },
+  {
+    "field": "control theory, systems, and feedback",
+    "name": "Peaking phenomenon",
+    "aliases": [
+      "observer peaking",
+      "high-gain peaking"
+    ],
+    "symptom": "You crank observer/feedback gains up for fast convergence and instead get a giant transient spike before it settles, big enough to slam the plant into its nonlinear region.",
+    "framework": "High-gain observer peaking: a fundamental speed-vs-transient tradeoff. Saturate the control fed by the estimate, use projection, or slow the estimator during startup."
+  },
+  {
+    "field": "control theory, systems, and feedback",
+    "name": "Valve stiction",
+    "aliases": [
+      "static-friction limit cycle",
+      "hunting",
+      "stick-slip"
+    ],
+    "symptom": "A loop with a sticky mechanical element cycles in a sawtooth or square-wave pattern at steady setpoint — the element jumps, sticks, and the output keeps hunting no matter how you retune.",
+    "framework": "Valve stiction: static friction causes a self-sustained cycle that retuning cannot cure. Use stiction-detection methods (cross-correlation, shape analysis); the real fix is maintenance/valve repair or friction compensation."
+  },
+  {
+    "field": "control theory, systems, and feedback",
+    "name": "Relative Gain Array",
+    "aliases": [
+      "RGA",
+      "Bristol array",
+      "loop interaction",
+      "MIMO coupling"
+    ],
+    "symptom": "Each single loop tunes up beautifully on its own, but once you close them all simultaneously they fight each other and the whole system turns sluggish or unstable.",
+    "framework": "Bristol's Relative Gain Array: quantifies input-output interaction and correct loop pairing in multivariable plants. Guides pairing, decoupler design, or moving to full multivariable control."
+  },
+  {
+    "field": "control theory, systems, and feedback",
+    "name": "Dead time (transport delay)",
+    "aliases": [
+      "time delay",
+      "transport lag",
+      "delay-induced instability"
+    ],
+    "symptom": "There's a stubborn gap between acting and seeing any effect, so you're forced to detune to a crawl; any attempt to be aggressive produces slowly growing oscillations.",
+    "framework": "Smith predictor / dead-time compensation: a model predicts the delayed response so the delay is effectively removed from the feedback loop. Also underlies delay-margin analysis and Padé approximation."
+  },
+  {
+    "field": "control theory, systems, and feedback",
+    "name": "Bullwhip effect",
+    "aliases": [
+      "Forrester effect",
+      "demand amplification"
+    ],
+    "symptom": "Tiny fluctuations in end-customer demand turn into progressively wilder swings in orders and inventory as you move upstream through the chain.",
+    "framework": "Bullwhip effect / system dynamics: feedback plus information and shipping delays amplify variance upstream. Mitigate with demand-information sharing, shorter lead times, and smoothing order policies."
+  },
+  {
+    "field": "control theory, systems, and feedback",
+    "name": "Control/observation spillover",
+    "aliases": [
+      "spillover instability",
+      "modal spillover"
+    ],
+    "symptom": "You add active damping to the low vibration modes of a flexible structure and unexpectedly destabilize higher modes you weren't even trying to control.",
+    "framework": "Spillover in flexible-structure control: energy leaks into and out of residual (unmodeled) modes. Use collocated sensor/actuator pairs, low-pass roll-off, and mode-conditioned observers."
+  },
+  {
+    "field": "control theory, systems, and feedback",
+    "name": "Zeno behavior",
+    "aliases": [
+      "Zeno phenomenon",
+      "Zeno point"
+    ],
+    "symptom": "A switching/hybrid simulation grinds to a halt because events fire infinitely often within a shrinking time window; the clock seems to freeze mid-run.",
+    "framework": "Zeno behavior in hybrid systems: infinitely many discrete transitions in finite time. Fixes: temporal regularization, hysteresis switching, dwell-time constraints, or completing the execution past the Zeno point."
+  },
+  {
+    "field": "control theory, systems, and feedback",
+    "name": "Conditional stability",
+    "aliases": [
+      "conditionally stable loop"
+    ],
+    "symptom": "Lowering the loop gain — normally a safe move — actually pushes a working system into instability; it's stable only within a middle band, with both too little and too much gain being bad.",
+    "framework": "Conditional stability via the Nyquist criterion: the Nyquist locus encircles −1 only for a mid-range of gains, so gain margin is ambiguous. Reshape the loop so low-gain operation stays inside the stable region."
+  },
+  {
+    "field": "control theory, systems, and feedback",
+    "name": "Bumpless transfer",
+    "aliases": [
+      "mode-switching bump",
+      "manual-to-auto bump"
+    ],
+    "symptom": "Switching from manual to automatic, or between two controllers, produces a sudden jolt in the actuator because the incoming controller's internal state disagrees with the current output.",
+    "framework": "Bumpless transfer: keep the offline controller's states (especially the integrator) tracking the active output so switching is seamless; initialize/back-calculate the integral on handover."
+  },
+  {
+    "field": "control theory, systems, and feedback",
+    "name": "Intersample ripple",
+    "aliases": [
+      "ringing poles",
+      "hidden oscillation",
+      "deadbeat ripple"
+    ],
+    "symptom": "Your digital controller shows perfect on-target values at every sampling instant, yet the true continuous signal is swinging wildly in between the samples.",
+    "framework": "Intersample ripple / ringing poles: discrete (e.g. deadbeat) designs with closed-loop poles near the negative real axis look clean at sample points but oscillate between them. Check the continuous response, avoid canceling poles near z=−1, add roll-off."
+  },
+  {
+    "field": "control theory, systems, and feedback",
+    "name": "Internal model principle (steady-state offset)",
+    "aliases": [
+      "proportional droop",
+      "offset",
+      "steady-state error"
+    ],
+    "symptom": "A proportional-only loop settles nicely but always leaves a persistent gap from the target that grows under load; more gain shrinks the gap but never eliminates it.",
+    "framework": "Internal model principle: to reject a class of references/disturbances with zero steady-state error, the loop must contain a model of them (integral action for constant offsets, resonant terms for sinusoids)."
+  },
+  {
+    "field": "software architecture and engineering practice",
+    "name": "N+1 Query Problem",
+    "aliases": [
+      "N+1 selects",
+      "SELECT N+1",
+      "lazy-loading N+1"
+    ],
+    "symptom": "A list screen is snappy against test data but crawls in production; you watch the database get hit hundreds of times to render one page — one tiny lookup per row instead of a single fetch.",
+    "framework": "Names the ORM lazy-loading trap. Unlocks eager loading / JOIN fetch, prefetch/include directives, batching, and the DataLoader pattern to collapse the row-by-row queries into one."
+  },
+  {
+    "field": "software architecture and engineering practice",
+    "name": "Distributed Monolith",
+    "aliases": [
+      "microservices anti-pattern",
+      "distributed big ball of mud"
+    ],
+    "symptom": "You split into services but a single feature still forces you to deploy several of them together in lockstep; nothing releases independently, and a change in one service keeps breaking others.",
+    "framework": "Signals missing service autonomy. Unlocks DDD bounded contexts, contract/consumer-driven testing, async event decoupling, and rethinking the decomposition seams."
+  },
+  {
+    "field": "software architecture and engineering practice",
+    "name": "Law of Leaky Abstractions",
+    "aliases": [
+      "leaky abstraction",
+      "Spolsky's law"
+    ],
+    "symptom": "A wrapper meant to hide complexity works beautifully until an edge case forces you to understand the layer underneath anyway; it saved you typing but not thinking.",
+    "framework": "Joel Spolsky's law: all non-trivial abstractions leak. Unlocks designing deliberate escape hatches, learning the layer beneath, and budgeting for the leaks rather than trusting the facade."
+  },
+  {
+    "field": "software architecture and engineering practice",
+    "name": "Hyrum's Law",
+    "aliases": [
+      "Law of Implicit Interfaces",
+      "the law of implicit dependencies"
+    ],
+    "symptom": "You change an undocumented internal detail — output ordering, timing, an incidental quirk — and a downstream consumer breaks because it silently depended on the exact behavior you never promised.",
+    "framework": "With enough users, every observable behavior becomes a contract. Unlocks explicit versioning, deprecation policy, and deliberately randomizing incidental outputs (e.g. hash ordering) to prevent accidental dependence."
+  },
+  {
+    "field": "software architecture and engineering practice",
+    "name": "Cascading Failure",
+    "aliases": [
+      "failure cascade",
+      "domino failure"
+    ],
+    "symptom": "One component slows or dies, its callers pile up waiting, exhaust their threads and connection pools, and topple in turn — so a small localized fault takes down the whole system.",
+    "framework": "Names the systemic collapse mode from Release It!. Unlocks circuit breakers, bulkheads, aggressive timeouts, load shedding, and graceful degradation."
+  },
+  {
+    "field": "software architecture and engineering practice",
+    "name": "Retry Storm",
+    "aliases": [
+      "retry amplification",
+      "retry DDoS",
+      "metastable failure (related)"
+    ],
+    "symptom": "A struggling service gets pounded even harder because every client auto-retries on failure, multiplying load precisely when the system can least absorb it — and it can't recover because the retries never let up.",
+    "framework": "Unlocks exponential backoff with jitter, retry budgets, token-bucket rate limits, and circuit breakers to cap the self-inflicted amplification."
+  },
+  {
+    "field": "software architecture and engineering practice",
+    "name": "Heisenbug",
+    "aliases": [
+      "disappearing bug",
+      "observer-effect bug"
+    ],
+    "symptom": "The defect vanishes the instant you attach a debugger or add a log line; it only shows up in optimized production builds and flatly refuses to reproduce while you're watching.",
+    "framework": "Names a bug-taxonomy class (alongside Bohrbug/Mandelbug). Points you at races, timing, uninitialized memory, and optimizer interactions — fix via non-intrusive tracing and deterministic record/replay."
+  },
+  {
+    "field": "software architecture and engineering practice",
+    "name": "Big Ball of Mud",
+    "aliases": [
+      "spaghetti architecture",
+      "shantytown code"
+    ],
+    "symptom": "The codebase has no discernible structure; everything depends on everything, changes ripple unpredictably, and nobody can explain the architecture because there genuinely isn't one.",
+    "framework": "Foote & Yoder's named anti-pattern. Unlocks the strangler fig, anti-corruption layers, bounded contexts, and disciplined incremental refactoring toward real seams."
+  },
+  {
+    "field": "software architecture and engineering practice",
+    "name": "Technical Debt",
+    "aliases": [
+      "design debt",
+      "code debt"
+    ],
+    "symptom": "Early shortcuts that sped delivery now make every new change slower and riskier; you're paying compounding interest in bugs and friction for decisions made long ago.",
+    "framework": "Ward Cunningham's metaphor. Unlocks Fowler's debt quadrant (deliberate/inadvertent × prudent/reckless), explicit tracking, and scheduled paydown/refactoring budgets."
+  },
+  {
+    "field": "software architecture and engineering practice",
+    "name": "Second-System Effect",
+    "aliases": [
+      "second-system syndrome"
+    ],
+    "symptom": "After a lean, successful first release, the follow-up balloons with every feature deferred before — over-engineered and grandiose — and collapses under its own ambition.",
+    "framework": "Brooks's observation from The Mythical Man-Month. Unlocks deliberate scope discipline, incremental delivery, and resisting gold-plating on the redesign."
+  },
+  {
+    "field": "software architecture and engineering practice",
+    "name": "Golden Hammer",
+    "aliases": [
+      "law of the instrument",
+      "Maslow's hammer",
+      "if all you have is a hammer"
+    ],
+    "symptom": "A team reaches for the same familiar tool, language, or pattern for every problem regardless of fit, contorting the requirements to match the tool rather than choosing the right one.",
+    "framework": "Named anti-pattern of over-relying on a comfortable tool. Unlocks deliberate technology selection, spike/prototype comparisons, and matching solution to actual problem constraints."
+  },
+  {
+    "field": "epistemology and philosophy of science",
+    "name": "Gettier problem",
+    "aliases": [
+      "Gettier cases",
+      "justified-true-belief problem",
+      "JTB counterexamples"
+    ],
+    "symptom": "Someone has a belief that is both true and backed by perfectly good reasons, yet it seems wrong to call it knowledge because the reasons happened to line up with reality only by luck.",
+    "framework": "Shows that justified true belief is insufficient for knowledge (Gettier 1963). Unlocks the fourth-condition/anti-luck literature: no-false-lemmas, defeasibility theories, causal and reliabilist accounts, sensitivity/safety conditions (Nozick, Sosa, Williamson's knowledge-first), and virtue epistemology."
+  },
+  {
+    "field": "epistemology and philosophy of science",
+    "name": "Problem of induction",
+    "aliases": [
+      "Hume's problem",
+      "Humean skepticism about induction",
+      "riddle of induction (old)"
+    ],
+    "symptom": "Every attempt to justify expecting the future to resemble the past ends up quietly assuming the very regularity it is trying to establish, so the inference never gets non-circular support.",
+    "framework": "Hume's argument that inductive inference has no non-question-begging justification. Unlocks the space of responses: Popper's deductivism/falsificationism, pragmatic vindication (Reichenbach), Goodman's reframing as a problem of projectible predicates, Bayesian conditionalization, and reliabilist externalism."
+  },
+  {
+    "field": "epistemology and philosophy of science",
+    "name": "Duhem–Quine thesis",
+    "aliases": [
+      "confirmation holism",
+      "Duhem–Quine problem",
+      "auxiliary-hypothesis problem"
+    ],
+    "symptom": "An experiment comes out wrong, but you can't pin the blame: maybe the hypothesis is false, or maybe an instrument, calibration, or background assumption failed—and you can always rescue the theory by faulting something else.",
+    "framework": "Hypotheses face the tribunal of experience only as bundles with auxiliaries, so no single claim is decisively refuted (Duhem, Quine 'Two Dogmas'). Unlocks strategies for locating blame: severe testing (Mayo), independent triangulation of auxiliaries, Bayesian distribution of blame, and Lakatosian protective-belt analysis."
+  },
+  {
+    "field": "epistemology and philosophy of science",
+    "name": "Underdetermination of theory by data",
+    "aliases": [
+      "underdetermination thesis",
+      "UTD",
+      "empirical equivalence problem"
+    ],
+    "symptom": "Two mutually incompatible accounts fit all the available evidence equally well, and it looks like no conceivable observation could ever adjudicate between them.",
+    "framework": "Evidence alone cannot uniquely fix theory choice. Unlocks appeals to non-empirical/theoretical virtues (simplicity, unification, explanatory power), the distinction between transient and permanent underdetermination, and debates over whether empirically equivalent rivals are genuinely distinct (van Fraassen, Laudan–Leplin)."
+  },
+  {
+    "field": "epistemology and philosophy of science",
+    "name": "Münchhausen trilemma",
+    "aliases": [
+      "Agrippa's trilemma",
+      "regress problem",
+      "epistemic regress argument",
+      "Fries's trilemma"
+    ],
+    "symptom": "Any demand for justification generates a demand for a further justification, and you seem forced to either regress forever, stop arbitrarily, or loop back on yourself.",
+    "framework": "Shows justification must be infinite, foundational, or circular (Agrippa; Albert). Unlocks the foundationalism vs. coherentism vs. infinitism debate, plus intermediate fixes: moderate foundationalism, default/entitlement-based reasons, and contextualist stopping points."
+  },
+  {
+    "field": "epistemology and philosophy of science",
+    "name": "Problem of the criterion",
+    "aliases": [
+      "diallelus",
+      "wheel argument",
+      "criterion problem"
+    ],
+    "symptom": "To sort real knowledge from mere belief you need a reliable method, but to know the method is reliable you already need some accepted instances of knowledge—so you can't get the project off the ground.",
+    "framework": "The circular dependence of criteria and particulars (Sextus; Chisholm). Unlocks the particularist vs. methodist responses—Chisholm's particularism, Reidian common sense, and reflective-equilibrium approaches that build criteria and cases together."
+  },
+  {
+    "field": "epistemology and philosophy of science",
+    "name": "Theory-ladenness of observation",
+    "aliases": [
+      "theory-laden observation",
+      "observation is theory-laden"
+    ],
+    "symptom": "What everyone treats as 'the raw data' already presupposes the theory being tested, and observers committed to different frameworks genuinely report seeing different things in the same display.",
+    "framework": "Perception and measurement are shaped by conceptual/theoretical commitments (Hanson, Kuhn). Unlocks responses that preserve objectivity: distinguishing perceptual from semantic ladenness, robustness/triangulation across independent methods, and the relative theory-independence of instrument readings."
+  },
+  {
+    "field": "epistemology and philosophy of science",
+    "name": "New riddle of induction",
+    "aliases": [
+      "grue paradox",
+      "Goodman's paradox",
+      "grue–bleen problem",
+      "projectibility problem"
+    ],
+    "symptom": "The very same observations support both a normal generalization and a bizarre gerrymandered one equally well, and which prediction counts as 'natural' turns out to depend on a hidden choice of vocabulary.",
+    "framework": "Goodman's demonstration that confirmation depends on which predicates are projectible. Unlocks the projectibility/entrenchment machinery, natural-kinds and naturalness constraints, and Bayesian priors over hypotheses as the locus of the difference."
+  },
+  {
+    "field": "epistemology and philosophy of science",
+    "name": "Raven paradox",
+    "aliases": [
+      "Hempel's paradox",
+      "paradox of confirmation",
+      "paradox of the ravens"
+    ],
+    "symptom": "Logic says that spotting an ordinary non-black non-bird—a green apple—somehow counts as evidence for a sweeping claim about the color of an entirely different kind of thing.",
+    "framework": "Hempel's confirmation paradox from the equivalence + Nicod conditions. Unlocks Bayesian resolution (a green apple confirms 'all ravens are black' but only negligibly, given the vast number of non-black things), and analyses distinguishing qualitative from quantitative confirmation."
+  },
+  {
+    "field": "epistemology and philosophy of science",
+    "name": "Reference class problem",
+    "aliases": [
+      "problem of the reference class",
+      "reference-class problem"
+    ],
+    "symptom": "The probability you assign to a single case swings wildly depending on which broader group you decide the case belongs to, and there's no obviously correct group to use.",
+    "framework": "Single-case probabilities are relative to a chosen class (Venn; Reichenbach; Hájek 'The Reference Class Problem Is Your Problem Too'). Unlocks the 'narrowest reliable class' rule, propensity interpretations, and Bayesian/subjectivist responses that fold the choice into priors."
+  },
+  {
+    "field": "epistemology and philosophy of science",
+    "name": "Pessimistic meta-induction",
+    "aliases": [
+      "pessimistic induction",
+      "PMI",
+      "argument from the history of science"
+    ],
+    "symptom": "Our best current theory feels obviously true, yet nearly every past 'best theory' was later judged false, so an induction over that track record suggests today's will be discarded too.",
+    "framework": "Laudan's historical challenge to scientific realism. Unlocks selective/structural realism (Worrall)—commit only to the mathematical structure or the working posits that survive theory change—and the divide-and-conquer reply distinguishing idle from essential theoretical parts."
+  },
+  {
+    "field": "epistemology and philosophy of science",
+    "name": "Experimenter's regress",
+    "aliases": [
+      "Collins's experimenter's regress"
+    ],
+    "symptom": "To know your apparatus is working correctly you'd need to already know the right result, but the right result is exactly the unknown thing you built the apparatus to measure—so competence and outcome define each other in a loop.",
+    "framework": "Collins's analysis of how 'a good detector' and 'the correct outcome' are mutually defining in disputed experiments. Unlocks the resolution by external, non-experimental closure (calibration against independently known signals, theoretical constraints, and social/consensus mechanisms), and the concept of robustness across independent instruments."
+  },
+  {
+    "field": "epistemology and philosophy of science",
+    "name": "Look-elsewhere effect",
+    "aliases": [
+      "multiple comparisons problem",
+      "multiplicity",
+      "problem of multiple testing",
+      "garden of forking paths"
+    ],
+    "symptom": "Scan enough hypotheses, subgroups, or bins and some will cross the significance threshold by pure chance; a striking 'signal' quietly dissolves once you account for how many places you looked.",
+    "framework": "Inflation of false positives under many implicit or explicit tests (Miller; physics 'look-elsewhere'). Unlocks multiplicity corrections (Bonferroni, Holm), false-discovery-rate control (Benjamini–Hochberg), pre-registration, and global vs. local p-value/trials-factor adjustments."
+  },
+  {
+    "field": "epistemology and philosophy of science",
+    "name": "Lottery paradox",
+    "aliases": [
+      "Kyburg's lottery paradox"
+    ],
+    "symptom": "It seems rational to believe of each ticket that it will lose, yet you obviously can't believe every ticket loses—so a set of individually reasonable beliefs jointly guarantees a contradiction.",
+    "framework": "Kyburg's demonstration that high-probability belief isn't closed under conjunction. Unlocks the debate over a threshold ('Lockean') view of belief vs. knowledge norms, denial of conjunction closure, and the divorce of outright belief from credence (Foley, Leitgeb's stability theory)."
+  },
+  {
+    "field": "epistemology and philosophy of science",
+    "name": "Preface paradox",
+    "aliases": [
+      "paradox of the preface",
+      "Makinson's preface paradox"
+    ],
+    "symptom": "You justifiably believe each individual claim you've made, yet you also justifiably believe at least one of them must be mistaken—so warranted belief and logical consistency come apart.",
+    "framework": "Makinson's case that rational belief needn't be deductively consistent. Unlocks fallibilist models of acceptance, graded belief/credence over binary belief, non-adjunctive and paraconsistent logics, and probabilistic accounts of rational commitment."
+  },
+  {
+    "field": "epistemology and philosophy of science",
+    "name": "Is–ought problem",
+    "aliases": [
+      "Hume's guillotine",
+      "is-ought gap",
+      "fact-value gap",
+      "naturalistic fallacy (related)"
+    ],
+    "symptom": "An argument glides from purely factual premises to a conclusion about what should be done, and the prescriptive 'therefore we ought' appears with no visible bridge from the descriptive claims.",
+    "framework": "Hume's observation that no 'ought' follows from 'is' alone. Unlocks meta-ethical positions on the gap: non-cognitivism, the naturalistic-fallacy diagnosis (Moore's open-question argument), Searle's institutional-fact derivation, and bridge-principle strategies for making the inference explicit."
+  },
+  {
+    "field": "epistemology and philosophy of science",
+    "name": "Demarcation problem",
+    "aliases": [
+      "problem of demarcation",
+      "science/pseudoscience line",
+      "demarcation criterion"
+    ],
+    "symptom": "You sense that some inquiry is bogus but can't state a clean, general rule that admits every genuine science while excluding the pretenders—every proposed line either lets in cranks or throws out real science.",
+    "framework": "The search for a criterion separating science from non/pseudoscience (Popper). Unlocks falsifiability, Kuhn's puzzle-solving normal science, Lakatos's progressive vs. degenerating research programmes, Laudan's 'demise of the demarcation problem,' and multi-criterion/Bayesian family-resemblance accounts."
+  },
+  {
+    "field": "information retrieval, HCI, and search",
+    "name": "Vocabulary mismatch problem",
+    "aliases": [
+      "term mismatch",
+      "synonymy problem",
+      "the vocabulary problem",
+      "word mismatch"
+    ],
+    "symptom": "A user searches with perfectly sensible words and gets nothing useful, even though relevant documents clearly exist — the documents just happened to phrase the same idea with different words.",
+    "framework": "Furnas et al.'s finding that people spontaneously use the same term for a thing less than 20% of the time. Unlocks query expansion, thesauri/synonym maps, relevance feedback, latent semantic analysis, and dense/embedding retrieval to bridge surface-form gaps."
+  },
+  {
+    "field": "information retrieval, HCI, and search",
+    "name": "Position bias",
+    "aliases": [
+      "presentation bias",
+      "rank bias",
+      "examination bias"
+    ],
+    "symptom": "Items shown near the top get clicked far more no matter how good they actually are, so your click logs make top-ranked results look excellent and can't distinguish real quality from mere placement.",
+    "framework": "The examination hypothesis and click models. Unlocks counterfactual learning-to-rank, inverse-propensity weighting, cascade/PBM click models, and interleaving to get unbiased signal from implicit feedback."
+  },
+  {
+    "field": "information retrieval, HCI, and search",
+    "name": "Filter bubble",
+    "aliases": [
+      "echo chamber",
+      "personalization bubble"
+    ],
+    "symptom": "The harder the system personalizes, the narrower the results become; the user progressively sees only things confirming past behavior and stops encountering diverse or challenging viewpoints.",
+    "framework": "Pariser's framing of over-personalization. Unlocks result diversification (e.g., MMR), serendipity and novelty objectives, and explicit exploration/exploitation balancing to counter self-reinforcing narrowing."
+  },
+  {
+    "field": "information retrieval, HCI, and search",
+    "name": "Information scent",
+    "aliases": [
+      "information foraging theory",
+      "scent of information"
+    ],
+    "symptom": "Users decide whether to click a link or abandon a page from tiny cues in labels and snippets; when those cues are weak they give up or wander even though the right content is one step away.",
+    "framework": "Pirolli & Card's information foraging theory. Unlocks scent-based interface design: informative link labels and snippets, cue-rich navigation, and modeling patch-leaving decisions to keep users on the trail."
+  },
+  {
+    "field": "information retrieval, HCI, and search",
+    "name": "Berrypicking model",
+    "aliases": [
+      "berry-picking",
+      "evolving search model",
+      "Bates model"
+    ],
+    "symptom": "Real users don't fire one query and accept a final result set; their need shifts as they read, they collect useful bits along the way, and evaluating them on a single static query misrepresents what they're doing.",
+    "framework": "Marcia Bates's berrypicking model of evolving, bit-at-a-time search. Unlocks session-based and interactive IR, support for iterative query reformulation, and evaluation that spans a whole task, not one shot."
+  },
+  {
+    "field": "information retrieval, HCI, and search",
+    "name": "Anomalous State of Knowledge",
+    "aliases": [
+      "ASK",
+      "ASK hypothesis",
+      "Belkin's ASK"
+    ],
+    "symptom": "A user can't state precisely what they need — if they could describe it cleanly they'd already half-know it — so they type vague, underspecified queries for a gap they can't articulate.",
+    "framework": "Belkin's Anomalous State of Knowledge hypothesis. Unlocks exploratory-search support, query elicitation and clarification, faceted browsing, and treating the request as a symptom of a knowledge gap rather than a precise specification."
+  },
+  {
+    "field": "information retrieval, HCI, and search",
+    "name": "Banner blindness",
+    "aliases": [
+      "ad blindness",
+      "banner-ad blindness"
+    ],
+    "symptom": "Users completely fail to see or click genuinely important content because it looks like an advertisement or sits where ads usually live, so it gets tuned out entirely.",
+    "framework": "Benway & Lane's banner blindness studies. Unlocks eye-tracking validation and design guidance to avoid ad-like styling, animation, and placement for content you actually want noticed."
+  },
+  {
+    "field": "information retrieval, HCI, and search",
+    "name": "Fitts's Law",
+    "aliases": [
+      "Fitts law",
+      "Fitts' law"
+    ],
+    "symptom": "Small, far-apart, or crowded click targets make a UI feel sluggish and error-prone to operate, and you can't quite pin down why interactions take so long.",
+    "framework": "Fitts's Law relating acquisition time to target distance and size. Unlocks quantitative target sizing, placing frequent actions at screen edges/corners (effectively infinite width), and pointer-friendly layout."
+  },
+  {
+    "field": "information retrieval, HCI, and search",
+    "name": "Hick's Law",
+    "aliases": [
+      "Hick–Hyman law",
+      "Hick-Hyman law"
+    ],
+    "symptom": "Adding more options to a menu or choice screen makes users slower and more hesitant to decide, not faster — decision time grows and people feel paralyzed.",
+    "framework": "The Hick–Hyman law: choice-reaction time rises with the log of the number of alternatives. Unlocks reducing and categorizing options, progressive disclosure, and sensible defaults to cut decision load."
+  },
+  {
+    "field": "information retrieval, HCI, and search",
+    "name": "Semantic gap",
+    "aliases": [
+      "semantic gap in CBIR",
+      "sensory gap"
+    ],
+    "symptom": "Your image or audio search matches low-level signal features like color, texture, or shape, so results look mathematically similar to the machine yet plainly wrong or irrelevant to a human viewer.",
+    "framework": "The semantic gap between low-level features and human meaning in content-based retrieval. Unlocks learned/deep representations, tagging and metadata, relevance feedback, and multimodal embeddings that align features with concepts."
+  },
+  {
+    "field": "information retrieval, HCI, and search",
+    "name": "Pooling bias",
+    "aliases": [
+      "incompleteness bias",
+      "pool bias",
+      "incomplete relevance judgments"
+    ],
+    "symptom": "Your evaluation only judged documents that earlier systems happened to retrieve, so a genuinely better new system gets unfairly penalized when it surfaces relevant documents nobody ever judged.",
+    "framework": "Pool bias in Cranfield/TREC-style evaluation with incomplete judgments. Unlocks pooling methodology, judgment-robust metrics (bpref, infAP, condensed lists), and reusability studies for test collections."
+  },
+  {
+    "field": "information retrieval, HCI, and search",
+    "name": "Popularity bias",
+    "aliases": [
+      "rich-get-richer effect",
+      "exposure bias",
+      "algorithmic feedback loop"
+    ],
+    "symptom": "Popular items get recommended more, which makes them even more popular, and the system keeps training on its own outputs until a shrinking set of winners dominates everything.",
+    "framework": "Self-reinforcing feedback loops in recommenders. Unlocks exposure/propensity correction, explicit exploration, off-policy debiasing, and long-tail-aware objectives to break the reinforcement cycle."
+  },
+  {
+    "field": "information retrieval, HCI, and search",
+    "name": "Change blindness",
+    "aliases": [
+      "change-blindness"
+    ],
+    "symptom": "A user fails to notice a substantial on-screen change — a value updated, an element appeared or vanished — because it happened during a flicker, scroll, page load, or while their attention was elsewhere.",
+    "framework": "Change-blindness research from visual perception. Unlocks animated transitions that preserve object continuity, salient change highlighting, and avoiding disruptions that mask updates."
+  },
+  {
+    "field": "information retrieval, HCI, and search",
+    "name": "Gulf of evaluation",
+    "aliases": [
+      "Norman's gulfs",
+      "gulf of execution",
+      "gulfs of execution and evaluation"
+    ],
+    "symptom": "Users can't tell whether their action actually worked or what state the system is now in; or they can't figure out which control maps to the goal they have in mind.",
+    "framework": "Norman's gulfs of execution and evaluation from The Design of Everyday Things. Unlocks clear feedback, visible system state, natural mappings, and signifiers to bridge intention-to-action and outcome-to-understanding."
+  },
+  {
+    "field": "information retrieval, HCI, and search",
+    "name": "Novelty effect",
+    "aliases": [
+      "newness effect",
+      "novelty bias"
+    ],
+    "symptom": "A newly launched feature shows a strong metric lift right after release, then that lift steadily decays over the following weeks as the initial curiosity wears off.",
+    "framework": "The novelty effect in experimentation. Unlocks longer holdout periods, burn-in windows, cohort/new-vs-returning analysis, and measuring steady-state impact rather than launch-week spikes."
+  },
+  {
+    "field": "optimization and operations research",
+    "name": "Optimizer's curse",
+    "aliases": [
+      "post-decision surprise",
+      "winner's curse in decision analysis"
+    ],
+    "symptom": "You pick the alternative with the best estimated value, but the realized outcome consistently comes in below its estimate; the 'winner' of your selection process is disappointing on average, again and again.",
+    "framework": "Described by Smith & Winkler. It's selection bias from maximizing over noisy estimates; the fix is Bayesian shrinkage/hierarchical adjustment of the estimates before you optimize, so the top pick's forecast is de-biased."
+  },
+  {
+    "field": "optimization and operations research",
+    "name": "Flaw of averages",
+    "aliases": [
+      "Jensen's inequality",
+      "Savage's flaw of averages",
+      "plan for the average scenario"
+    ],
+    "symptom": "You plug average inputs into your model and plan around the single expected case, but actual performance is systematically worse (or biased) than that one-number plan promised.",
+    "framework": "Popularized by Sam Savage; rooted in Jensen's inequality (E[f(X)] ≠ f(E[X])). It points to stochastic programming, scenario analysis, and simulating over full distributions rather than substituting means."
+  },
+  {
+    "field": "optimization and operations research",
+    "name": "Price of anarchy",
+    "aliases": [
+      "PoA",
+      "coordination ratio"
+    ],
+    "symptom": "Every participant acts in rational self-interest and the system settles into a stable state, yet that state is measurably worse than what a central coordinator could have achieved.",
+    "framework": "Introduced by Koutsoupias & Papadimitriou. It quantifies the selfish-equilibrium-vs-optimum ratio and motivates mechanism design, tolls, and incentives that realign equilibria with the social optimum."
+  },
+  {
+    "field": "optimization and operations research",
+    "name": "Simplex cycling and degeneracy",
+    "aliases": [
+      "stalling",
+      "degeneracy in linear programming",
+      "simplex cycling"
+    ],
+    "symptom": "Your LP solver keeps pivoting but the objective value stops improving, sometimes revisiting bases it has already seen, and it can loop indefinitely without making real progress.",
+    "framework": "A known failure mode of the simplex method at degenerate vertices. The fixes are Bland's anti-cycling rule, lexicographic pivoting, and perturbation techniques that guarantee termination."
+  },
+  {
+    "field": "optimization and operations research",
+    "name": "Ill-conditioning",
+    "aliases": [
+      "bad conditioning",
+      "high condition number",
+      "numerical instability"
+    ],
+    "symptom": "Tiny changes in the data or in rounding cause huge swings in the computed solution; the answer feels unstable and untrustworthy, and iterative solvers crawl toward convergence.",
+    "framework": "Captured by the condition number in numerical linear algebra. Naming it points to preconditioning, variable scaling/normalization, regularization, and numerically stable factorizations."
+  },
+  {
+    "field": "optimization and operations research",
+    "name": "Premature convergence to a local optimum",
+    "aliases": [
+      "local optima trap",
+      "getting stuck in a local minimum",
+      "stagnation"
+    ],
+    "symptom": "Your search or heuristic settles quickly on a solution and then stops improving no matter how long you run it, yet restarting from different starting points yields different, sometimes much better answers.",
+    "framework": "The global-vs-local optimization distinction. It unlocks multistart, simulated annealing, tabu search, basin hopping, population methods, and problem convexification/relaxation."
+  },
+  {
+    "field": "optimization and operations research",
+    "name": "No free lunch theorem",
+    "aliases": [
+      "NFL theorem",
+      "Wolpert–Macready theorem"
+    ],
+    "symptom": "You find an algorithm that dominates every rival on your benchmark, but on other problem classes it does no better than random guessing, and no single method wins everywhere.",
+    "framework": "Wolpert & Macready's result: averaged over all problems, all optimizers perform equally. It reframes the goal as matching algorithm to problem structure and exploiting known priors instead of seeking a universal solver."
+  },
+  {
+    "field": "optimization and operations research",
+    "name": "Combinatorial explosion (NP-hardness)",
+    "aliases": [
+      "exponential blow-up",
+      "intractability",
+      "NP-hard problem"
+    ],
+    "symptom": "A problem that's trivial on small instances becomes impossible as size grows; the number of feasible combinations explodes exponentially and brute-force enumeration is hopeless.",
+    "framework": "Computational complexity theory / NP-hardness. Recognizing it steers you to branch-and-bound, cutting planes, approximation algorithms with guarantees, metaheuristics, or reformulation to exploit special structure."
+  },
+  {
+    "field": "optimization and operations research",
+    "name": "Newsvendor problem",
+    "aliases": [
+      "newsboy problem",
+      "single-period stochastic inventory problem",
+      "critical fractile problem"
+    ],
+    "symptom": "You must commit to a quantity before uncertain demand is revealed: order too much and you eat waste/markdown, order too little and you lose sales — and simply ordering the mean demand turns out not to be optimal.",
+    "framework": "The classic single-period inventory model. The name gives the critical-fractile solution: order up to F⁻¹(Cu/(Cu+Co)), balancing underage against overage cost."
+  },
+  {
+    "field": "optimization and operations research",
+    "name": "Variability-induced congestion (Kingman's formula)",
+    "aliases": [
+      "VUT equation",
+      "Kingman's approximation",
+      "heavy-traffic queue blow-up"
+    ],
+    "symptom": "As you push a resource's utilization toward 100% to seem 'efficient,' waiting times and queue lengths don't rise gently — they blow up nonlinearly, and any variability in arrivals or service makes it dramatically worse.",
+    "framework": "Queueing theory and Kingman's VUT (variability–utilization–time) equation: wait scales with ρ/(1−ρ) times a variability factor. It prescribes buffer capacity, variability reduction, and not running systems near saturation."
+  },
+  {
+    "field": "optimization and operations research",
+    "name": "Big-M formulation weakness",
+    "aliases": [
+      "big-M method pitfall",
+      "weak MILP linearization"
+    ],
+    "symptom": "Your mixed-integer model uses large constant coefficients to switch constraints on and off; it solves slowly, gives loose relaxation bounds, and can even return solutions that violate the intended logic because of solver tolerances.",
+    "framework": "A well-known modeling trap in integer programming. The fix is to tighten the constants to their smallest valid values, or replace them with indicator constraints or convex-hull/disaggregated (extended) formulations."
+  },
+  {
+    "field": "optimization and operations research",
+    "name": "Zigzagging of steepest descent",
+    "aliases": [
+      "Rosenbrock valley",
+      "banana-function slowdown",
+      "narrow curved ravine"
+    ],
+    "symptom": "Your gradient-based optimizer bounces back and forth across the walls of a long, narrow, curved valley, taking tiny steps down its length and crawling agonizingly slowly toward the minimum.",
+    "framework": "The classic ill-conditioned descent behavior illustrated by the Rosenbrock function. It points to momentum, conjugate-gradient, Newton/quasi-Newton (curvature) methods, and preconditioning/rescaling."
+  },
+  {
+    "field": "optimization and operations research",
+    "name": "Exploration–exploitation dilemma",
+    "aliases": [
+      "multi-armed bandit problem",
+      "explore–exploit tradeoff"
+    ],
+    "symptom": "You keep choosing the option that looks best so far, but you're never sure whether a less-tried option is actually better; test too long and you burn resources on inferior choices, commit too early and you may lock into a suboptimal one.",
+    "framework": "The multi-armed bandit framework. Naming it unlocks regret-minimizing policies: upper-confidence-bound (UCB), Thompson sampling, and epsilon-greedy strategies that balance learning against earning."
+  },
+  {
+    "field": "optimization and operations research",
+    "name": "Integrality gap",
+    "aliases": [
+      "LP relaxation gap",
+      "relaxation gap"
+    ],
+    "symptom": "You drop the integer constraints to get a quick bound, but the fractional solution's value sits far from any achievable whole-number solution, so the bound is loose and naive rounding produces poor results.",
+    "framework": "The gap between an integer program and its LP relaxation. It motivates stronger/tighter formulations, valid inequalities and cutting planes, branch-and-cut, and it bounds achievable approximation ratios."
+  }
+]
