@@ -44,9 +44,25 @@ flowchart TD
     T3 -. "a successful web naming becomes a candidate catalog entry" .-> T2
 ```
 
-None of these stages is new — each one enacts a classical idea from
-ontology and knowledge organization, which is worth knowing because those
-fields already solved the failure modes:
+Taken as a whole, this pipeline has an established name of its own: it is
+**differential diagnosis**, as clinical medicine has practiced it for over a
+century. A patient presents with symptoms they can't name (1); the clinician
+generates a ranked differential (2), orders the test that separates the
+leading candidates (4), confirms against diagnostic criteria rather than
+surface resemblance (3), and delivers a diagnosis with its treatment plan —
+or records "undiagnosed" instead of forcing a label (5). The capture loop is
+the case report entering the literature.
+
+We name that deliberately, because it's this framework's own move applied to
+itself: a vocabulary invented in one team's design discussions (or in a
+conversation with an AI) can't be checked from outside, but "differential
+diagnosis" hands you a mature external discipline to check this design
+against — everything medicine has learned about anchoring bias, premature
+closure, and base rates transfers directly.
+
+Stage by stage, each step also enacts a classical idea from ontology and
+knowledge organization, which is worth knowing because those fields already
+solved the failure modes:
 
 | Stage | The ontology idea it enacts |
 |---|---|
