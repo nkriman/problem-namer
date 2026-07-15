@@ -23,6 +23,40 @@ The unknown-unknown case — you don't know a name exists, so you'd never ask �
 is why the push adapter (the hook) is the headline. The others cover the
 cases where the model or the user does notice.
 
+## The pipeline
+
+Every adapter is a thin entry point into the same five conceptual stages:
+
+```mermaid
+flowchart TD
+    U["Someone describes a situation they can't name"] --> D{"1 · DETECT — is this a naming gap?<br/>hook: harness regex (push) · skill: model (ambient) · CLI + prompt: user (explicit)"}
+    D -->|"no signal"| Q0(["silence — never nag"])
+    D -->|"signal"| LOOKUP
+    subgraph LOOKUP["2 · LOOK UP — cheapest tier first"]
+        direction LR
+        T1["model memory<br/>free — famous problems"] --> T2["local catalog — indexes/<br/>instant — your coined vocabulary"] --> T3["web search<br/>slow — everything else"]
+    end
+    LOOKUP --> V{"3 · VERIFY — does the name exist,<br/>and does its established meaning fit THIS symptom?"}
+    V -->|"top candidates too close"| DQ["4 · DISCRIMINATE<br/>ask the one observable question that separates them"]
+    DQ --> V
+    V -->|"no confident fit"| NIL(["no-match is an answer:<br/>silence, or 'no established name' — never stretch a match"])
+    V -->|"one clear fit"| S["5 · SURFACE<br/>'There's a name for this: X'<br/>+ what knowing it unlocks + distinct-from note"]
+    T3 -. "a successful web naming becomes a candidate catalog entry" .-> T2
+```
+
+None of these stages is new — each one enacts a classical idea from
+ontology and knowledge organization, which is worth knowing because those
+fields already solved the failure modes:
+
+| Stage | The ontology idea it enacts |
+|---|---|
+| **1 · Detect** | The naming gap is a missing *instance → concept* link: a lived situation that belongs to a class whose label the describer doesn't hold. Library science's fix is the **entry vocabulary** — index the words novices actually use, not the expert's terms. That's why `symptom` is written from *before* you know the name. |
+| **2 · Look up** | **Entity linking / ontology alignment**: generate candidate canonical concepts for a free-text mention. The catalog is a micro-ontology in [SKOS](https://www.w3.org/TR/skos-primer/) terms — `name` ≈ `prefLabel`, `aliases` ≈ `altLabel`, `symptom` ≈ the entry vocabulary that points at the concept. |
+| **3 · Verify** | Classification by **intension, not surface similarity**: an instance belongs to a concept because it satisfies the concept's defining conditions, not because their words overlap. Lexical overlap (stage 2) proposes; only intension confirms. |
+| **4 · Discriminate** | **Genus + differentia**, operationalized as a biologist's dichotomous key: sibling concepts are told apart by one observable property (livelock vs. deadlock: is the CPU busy or idle?). `distinguish` is a disjointness axiom in prose. |
+| **5 · Surface / NIL** | A label is a **handle into the concept's connected knowledge** — `framework` carries the concept's relations to canonical analyses and fixes, which is the actual payoff of naming. And NIL respects the **open-world assumption**: the ontology lacking a match is information ("no established name found"), never license to force one. |
+| **↺ Capture** | **Ontology population**: concepts enter the catalog from usage — a successful web-search naming is a candidate entry, so the ontology grows as a byproduct of solving. |
+
 ## Out of the box: no catalog, web search
 
 By default the framework ships **zero knowledge**. The hook detects the
